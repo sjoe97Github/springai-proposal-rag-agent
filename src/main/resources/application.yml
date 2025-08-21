@@ -35,18 +35,3 @@ spring:
         command: down
         arguments: -v
       enabled: false
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include:
-          - health
-          - metrics
-          - prometheus
-
-  ### Set sampling probability to 1.0 to enable tracing
-  ### on 100% of requests.
-  tracing:
-    sampling:
-      probability: 1.0
