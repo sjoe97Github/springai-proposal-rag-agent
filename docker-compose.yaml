@@ -5,6 +5,21 @@ services:
       - '6333:6333'
       - '6334:6334'
 
+  #
+  # If not running ollama locally, you can uncomment this ollama service section to run it in a container.
+  # Also, if you do have the ollama models already downloaded, point source to the correct local path.
+  #
+#  ollama:
+#    image: ollama/ollama:latest
+#    container_name: ollama
+#    ports:
+#      - "11434:11434"
+#    volumes:
+#      - type: bind
+#        source: /Your/Home/Path/.ollama
+#        target: /root/.ollama
+#    restart: unless-stopped
+
 volumes:
   chroma-data:
     driver: local

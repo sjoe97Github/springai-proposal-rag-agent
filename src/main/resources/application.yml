@@ -13,15 +13,29 @@ app:
 #  resource: file:///Users/sjohnson/shared/data/proposals/seed-proposals/contract-proposal-1.pdf
 spring:
   ai:
-    openai:
-      api-key: ${OPENAI_API_KEY}
+#    openai:
+#      api-key: ${OPENAI_API_KEY}
+#      chat:
+#        options:
+#          model: gpt-4o-mini
+    ollama:
+      base-url: http://localhost:11434
       chat:
         options:
-          model: gpt-4o-mini
+          model: mervinpraison/llama3.2-3B-instruct:8b
+          temperature: 0.7
+      embedding:
+        options:
+          model: tazarov/all-minilm-l6-v2-f32
+          max-tokens: 2048
+          top-k: 2
     vectorstore:
       topk: 2
       qdrant:
         initialize-schema: true
+        dimension: 384
+        collection-name: proposals
+        recreate-collection: true
 
     chat:
       observations:
