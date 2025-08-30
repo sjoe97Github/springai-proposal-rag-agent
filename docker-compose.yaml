@@ -1,4 +1,22 @@
 services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: postgres_with_pgvector
+    restart: always
+    environment:
+      # These environment variables will be used to initialize the database
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: mydatabase
+    volumes:
+      # This will persist your database data
+      - ./data:/var/lib/postgresql/data
+    ports:
+      # Expose the PostgreSQL port
+      - "5432:5432"
+
   qdrant:
     image: 'qdrant/qdrant:latest'
     ports:

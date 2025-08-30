@@ -1,17 +1,20 @@
-### Set the resource path for the file to be processed
-### e.g., app.resource=file:///Users/yourname/Downloads/yourfile.pdf
-###    or app.resource=classpath:/data/myfile.pdf
 app:
   scan:
     recursive: true
     extensions: pdf,txt,docx
   index:
     batchSize: 50
-  resource: file:///Users/sjohnson/shared/data/proposals/seed-proposals
+  proposal-resources: file:///Users/sjohnson/shared/data/proposals/seed-proposals
+  resume-resources: file:///Users/sjohnson/shared/data/resumes-generated
 
 #  resource: https://en.wikipedia.org/wiki/Chess
 #  resource: file:///Users/sjohnson/shared/data/proposals/seed-proposals/contract-proposal-1.pdf
 spring:
+  datasource:
+      password: secret
+      username: myuser
+      url: jdbc:postgresql://localhost/mydatabase
+
   ai:
 #    openai:
 #      api-key: ${OPENAI_API_KEY}
@@ -23,19 +26,39 @@ spring:
       chat:
         options:
           model: mervinpraison/llama3.2-3B-instruct:8b
-          temperature: 0.7
+          temperature: 0.2
       embedding:
         options:
           model: tazarov/all-minilm-l6-v2-f32
           max-tokens: 2048
           top-k: 2
+
     vectorstore:
-      topk: 2
-      qdrant:
+      topk: 3
+      pgvector:
+        remove-existing-vector-store-table: true
+        # Automatically create the required schema and table on startup
         initialize-schema: true
-        dimension: 384
-        collection-name: proposals
-        recreate-collection: true
+        # The dimension of the embeddings. This must match your embedding model's output.
+        # ollama show tazarov/all-minilm-l6-v2-f32 shows an 'embedding length' of 384, this must match the dimension here.
+        dimensions: 384
+        # The index type for fast similarity search. HNSW is recommended.
+        # The PgIndexType enum defines the types of vector indexes that can be used in the PostgreSQL vector store:
+        #   NONE: No index will be created on the embedding column.
+        #   IVFFLAT: Uses the IVF_FLAT (Inverted File Flat) index, which is suitable for large-scale vector search and improves query performance.
+        #   HNSW: Uses the HNSW (Hierarchical Navigable Small World) index, which is efficient for approximate nearest neighbor search in high-dimensional spaces.
+        index-type: HNSW
+        # The distance metric to use for search.
+        distance-type: COSINE_DISTANCE
+        # Optional: Name of the table to store vectors
+#        table-name: proposals
+
+
+#      qdrant:
+#        initialize-schema: true
+#        dimension: 384
+#        collection-name: proposals
+#        recreate-collection: true
 
     chat:
       observations:
