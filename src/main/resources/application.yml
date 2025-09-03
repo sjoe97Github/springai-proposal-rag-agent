@@ -2,10 +2,12 @@ app:
   scan:
     recursive: true
     extensions: pdf,txt,docx
-  index:
+
+  ingest:
     batchSize: 50
-  proposal-resources: file:///Users/sjohnson/shared/data/proposals/seed-proposals
-  resume-resources: file:///Users/sjohnson/shared/data/resumes-generated
+    chunkSize: 5000
+    proposal-resources: file:///Users/sjohnson/shared/data/proposals/seed-proposals
+    resume-resources: file:///Users/sjohnson/shared/data/resumes-m5
 
 #  resource: https://en.wikipedia.org/wiki/Chess
 #  resource: file:///Users/sjohnson/shared/data/proposals/seed-proposals/contract-proposal-1.pdf
@@ -29,19 +31,20 @@ spring:
           temperature: 0.2
       embedding:
         options:
-          model: tazarov/all-minilm-l6-v2-f32
-          max-tokens: 2048
-          top-k: 2
+#          model: tazarov/all-minilm-l6-v2-f32
+          model: nomic-embed-text
+          max-tokens: 4096
+          top-k: 3
 
     vectorstore:
-      topk: 3
+      topk: 5
       pgvector:
         remove-existing-vector-store-table: true
         # Automatically create the required schema and table on startup
         initialize-schema: true
         # The dimension of the embeddings. This must match your embedding model's output.
-        # ollama show tazarov/all-minilm-l6-v2-f32 shows an 'embedding length' of 384, this must match the dimension here.
-        dimensions: 384
+        # ollama show nomic-embed-text shows an 'embedding length' of 768, this must match the dimension here.
+        dimensions: 768
         # The index type for fast similarity search. HNSW is recommended.
         # The PgIndexType enum defines the types of vector indexes that can be used in the PostgreSQL vector store:
         #   NONE: No index will be created on the embedding column.

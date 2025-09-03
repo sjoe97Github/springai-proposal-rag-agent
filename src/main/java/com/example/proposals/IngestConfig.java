@@ -12,7 +12,7 @@ public class IngestConfig {
 
     @Bean("fileSystemProposalIngest")
     public IngestResources fileSystemIngest(
-            @Value("${app.proposal-resources}") Resource documentResource,
+            @Value("${app.ingest.proposal-resources}") Resource documentResource,
             @Value("${app.scan.recursive:true}") boolean recursive,
             @Value("${app.scan.extensions:txt,pdf,doc,docx,md,html}") String includeExtensions) {
         return new FileSystemIngest(documentResource, recursive, includeExtensions);
@@ -20,7 +20,7 @@ public class IngestConfig {
 
     @Bean("fileSystemResumeIngest")
     public IngestResources fileSystemResumeIngest(
-            @Value("${app.resume-resources}") Resource documentResource,
+            @Value("${app.ingest.resume-resources}") Resource documentResource,
             @Value("${app.scan.recursive:true}") boolean recursive,
             @Value("${app.scan.extensions:txt,pdf,doc,docx,md,html}") String includeExtensions) {
         return new FileSystemIngest(documentResource, recursive, includeExtensions);

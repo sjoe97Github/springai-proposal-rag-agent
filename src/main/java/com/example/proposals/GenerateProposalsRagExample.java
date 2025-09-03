@@ -3,6 +3,7 @@ package com.example.proposals;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.SQLOutput;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -37,8 +38,11 @@ public class GenerateProposalsRagExample {
     }
 
     // Batch size for pushing to the vector store
-    @Value("${app.index.batchSize:100}")
+    @Value("${app.ingest.batchSize}")
     private int batchSize;
+
+    @Value("${app.ingest.chunkSize}")
+    private int chunkSize;
 
     @Autowired
 //    @Qualifier("fileSystemProposalIngest")
@@ -48,7 +52,7 @@ public class GenerateProposalsRagExample {
     @Bean
     ApplicationRunner applicationRunner(VectorStore vectorStore) {
         return args -> {
-            TextSplitter splitter = new TokenTextSplitter();
+            TextSplitter splitter = TokenTextSplitter.builder().withChunkSize(chunkSize).build();
 
             List<Resource> fileResources = fileSystemIngest.getResources();
 

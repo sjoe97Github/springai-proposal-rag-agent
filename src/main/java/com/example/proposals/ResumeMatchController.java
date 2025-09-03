@@ -10,13 +10,13 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,11 +24,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequestMapping("/resume-match")
 public class ResumeMatchController {
 
-    @Value("${spring.ai.vectorstore.topk:4}")
+    @Value("${spring.ai.ollama.embedding.options.top-k}")
     private int topK;
 
     @Value("classpath:/resume-ranking-template.txt")
     private Resource defaultPromptTemplate;
+
+    private final ResumeAgent resumeAgent;
 
     private final ChatClient aiClient;
     private final VectorStore vectorStore;
@@ -41,7 +43,8 @@ public class ResumeMatchController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public ResumeMatchController(ChatClient aiClient, VectorStore vectorStore) {
+    public ResumeMatchController(ChatClient aiClient, VectorStore vectorStore, ResumeAgent resumeAgent) {
+        this.resumeAgent = resumeAgent;
         this.aiClient = aiClient;
         this.vectorStore = vectorStore;
     }
@@ -61,13 +64,15 @@ public class ResumeMatchController {
         UserMessage userMessage = new UserMessage(query.getQuery());
         chatHistory.add(userMessage);
 
-        // Search for similar resumes
-        SearchRequest searchRequest = SearchRequest.builder()
-                .topK(topK)
-                .query(query.getQuery())
-                .build();
+//        // Search for similar resumes
+//        SearchRequest searchRequest = SearchRequest.builder()
+////                .topK(topK)
+//                .query(userMessage)
+//                .build();
+//
+//        List<Document> similarResumes = vectorStore.similaritySearch(searchRequest);
+        List<Document> similarResumes = resumeAgent.relevantResumes(query.getQuery());
 
-        List<Document> similarResumes = vectorStore.similaritySearch(searchRequest);
         // TODO - Null check similarResumes?
         similarResumes = deduplicateResumes(similarResumes);
 
@@ -97,14 +102,26 @@ public class ResumeMatchController {
         // Add to chat history
         chatHistory.add(new AssistantMessage(response));
 
-        // Create response
-        ResumeMatchResponse result = new ResumeMatchResponse();
-        result.setSessionId(sessionId);
-        result.setQuery(query.getQuery());
-        result.setResults(response);
-        result.setChatHistory(chatHistory);
+        // Parse AI response using Jackson to ensure valid JSON
+        // TODO - Re-evaluate the Jackson parsing approach given that the result being parsed is returned by the LLM
+        //        and therefore has a non-deterministic shape (may not be valid JSON). Consider using a more flexible
+        //        method to extract structured data from whatever shape string is returned in the chat response.
+        ResumeResult[] resumeResults = new ResumeResult[0];
+        try {
+            resumeResults = objectMapper.readValue(response, ResumeResult[].class);
+        } catch (JsonProcessingException e) {
+            // TODO - Use a logging framework
+            System.err.println("Failed to parse AI response: " + e.getMessage());
+        }
 
-        System.out.println("\n\nresult: " + objectMapper.writeValueAsString(result));
+        // Create response
+        ResumeMatchResponse result = new ResumeMatchResponse(
+            sessionId,
+            query.getQuery(),
+            resumeResults != null ? Arrays.asList(resumeResults) : Collections.emptyList(),
+            chatHistory
+        );
+        System.out.println("\n\nresult: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
         return result;
     }
 
@@ -157,7 +174,7 @@ public class ResumeMatchController {
             sb.append("CandidateID: ").append(metadata.getOrDefault("source", "unknown-" + i)).append("\n");
             sb.append("InitialScore: ").append(String.format("%.4f", doc.getScore())).append("\n");
             sb.append("Path: ").append(metadata.getOrDefault("path", "unknown")).append("\n");
-            sb.append("ResumeSnippet:\n").append(truncateText(doc.getText(), 1200)).append("\n---\n");
+            sb.append("ResumeSnippet:\n").append(truncateText(doc.getText(), 2400)).append("\n---\n");
         }
         return sb.toString();
     }
@@ -191,26 +208,6 @@ class JobQuery {
     public void setQuery(String query) { this.query = query; }
 }
 
-class ResumeMatchResponse {
-    private String sessionId;
-    private String query;
-    private String results;
-    private List<Message> chatHistory;
-
-    // Getters and setters
-    public String getSessionId() { return sessionId; }
-    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
-
-    public String getQuery() { return query; }
-    public void setQuery(String query) { this.query = query; }
-
-    public String getResults() { return results; }
-    public void setResults(String results) { this.results = results; }
-
-    public List<Message> getChatHistory() { return chatHistory; }
-    public void setChatHistory(List<Message> chatHistory) { this.chatHistory = chatHistory; }
-}
-
 class PromptTemplateRequest {
     private String sessionId;
     private String promptTemplate;
@@ -221,3 +218,18 @@ class PromptTemplateRequest {
     public String getPromptTemplate() { return promptTemplate; }
     public void setPromptTemplate(String promptTemplate) { this.promptTemplate = promptTemplate; }
 }
+
+record ResumeMatchResponse(
+    String sessionId,
+    String query,
+    List<ResumeResult> results,
+    List<Message> chatHistory
+) {}
+
+record ResumeResult(
+        String candidateId,
+        int finalScore,
+        String shortExplanation,
+        URL linkedin,
+        URL github
+) {}

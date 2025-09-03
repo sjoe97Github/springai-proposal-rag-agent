@@ -1,0 +1,5 @@
+You are an expert in technical recruitment.
+Based on the following User Query, write a hypothetical resume summary that can be used to find possible
+matching resumes using a similarity search of candidate resumes. Focus technical skills.
+Return the top 3 resumes that would best match the User Query.
+User Query: %s
