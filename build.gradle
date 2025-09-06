@@ -18,7 +18,7 @@ repositories {
 }
 
 ext {
-    springAiVersion = '1.0.0'
+    springAiVersion = '1.0.1'
 }
 
 dependencyManagement {
@@ -28,17 +28,21 @@ dependencyManagement {
 }
 
 dependencies {
+//    implementation platform('org.springframework.ai:spring-ai-bom')
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.ai:spring-ai-advisors-vector-store'
     implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
     implementation 'org.springframework.ai:spring-ai-tika-document-reader'
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-client'
+//    implementation 'org.springframework.ai:spring-ai-mcp:1.0.0'
+//    implementation 'org.springframework.ai:spring-ai-spring-boot-autoconfigure'
 //    implementation 'org.springframework.ai:spring-ai-starter-vector-store-qdrant'
 //    implementation 'io.qdrant:client:1.15.0'
     implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
     implementation 'org.postgresql:postgresql'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-tracing-bridge-otel'
-    implementation 'io.opentelemetry:opentelemetry-exporter-zipkin'
+//    implementation 'io.opentelemetry:opentelemetry-exporter-zipkin'
 
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     developmentOnly 'org.springframework.boot:spring-boot-docker-compose'

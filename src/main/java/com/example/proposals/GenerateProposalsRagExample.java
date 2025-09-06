@@ -11,6 +11,7 @@ import java.util.stream.Stream;
 import ingest.FileSystemIngest;
 import ingest.IngestResources;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.transformer.splitter.TextSplitter;
@@ -72,6 +73,14 @@ public class GenerateProposalsRagExample {
             if (!buffer.isEmpty()) {
                 vectorStore.accept(buffer);
             }
+        };
+    }
+    @Bean
+    ApplicationRunner toolDebugger(ChatClient chatClient) {
+        return args -> {
+            String debugPrompt = "What tools are available to you?";
+            ChatResponse response = chatClient.prompt(debugPrompt).call().chatResponse();
+            System.out.println("Available tools: " + response.getResult().getOutput().getText());
         };
     }
 }

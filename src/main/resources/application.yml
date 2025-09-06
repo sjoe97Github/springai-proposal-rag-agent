@@ -1,3 +1,9 @@
+logging:
+  level:
+    root: INFO
+    org.springframework.ai: DEBUG
+#    org.springframework.ai.mcp.client: DEBUG
+#    org.springframework.boot.autoconfigure: DEBUG
 app:
   scan:
     recursive: true
@@ -5,7 +11,7 @@ app:
 
   ingest:
     batchSize: 50
-    chunkSize: 5000
+    chunkSize: 1000
     proposal-resources: file:///Users/sjohnson/shared/data/proposals/seed-proposals
     resume-resources: file:///Users/sjohnson/shared/data/resumes-m5
 
@@ -18,11 +24,6 @@ spring:
       url: jdbc:postgresql://localhost/mydatabase
 
   ai:
-#    openai:
-#      api-key: ${OPENAI_API_KEY}
-#      chat:
-#        options:
-#          model: gpt-4o-mini
     ollama:
       base-url: http://localhost:11434
       chat:
@@ -31,7 +32,6 @@ spring:
           temperature: 0.2
       embedding:
         options:
-#          model: tazarov/all-minilm-l6-v2-f32
           model: nomic-embed-text
           max-tokens: 4096
           top-k: 3
@@ -40,33 +40,31 @@ spring:
       topk: 5
       pgvector:
         remove-existing-vector-store-table: true
-        # Automatically create the required schema and table on startup
         initialize-schema: true
-        # The dimension of the embeddings. This must match your embedding model's output.
-        # ollama show nomic-embed-text shows an 'embedding length' of 768, this must match the dimension here.
         dimensions: 768
-        # The index type for fast similarity search. HNSW is recommended.
-        # The PgIndexType enum defines the types of vector indexes that can be used in the PostgreSQL vector store:
-        #   NONE: No index will be created on the embedding column.
-        #   IVFFLAT: Uses the IVF_FLAT (Inverted File Flat) index, which is suitable for large-scale vector search and improves query performance.
-        #   HNSW: Uses the HNSW (Hierarchical Navigable Small World) index, which is efficient for approximate nearest neighbor search in high-dimensional spaces.
         index-type: HNSW
-        # The distance metric to use for search.
         distance-type: COSINE_DISTANCE
-        # Optional: Name of the table to store vectors
-#        table-name: proposals
 
-
-#      qdrant:
-#        initialize-schema: true
-#        dimension: 384
-#        collection-name: proposals
-#        recreate-collection: true
+    mcp:
+      client:
+        enabled: true
+        stdio:
+          connections:
+            local-mcp-service:
+                command: /Users/sjohnson/.nvm/versions/node/v18.20.6/bin/node
+                args:
+                  - /Users/sjohnson/mydev/experiments/github-repos-manager-mcp/server.cjs
+                env:
+                  GH_TOKEN: ${GH_TOKEN}
 
     chat:
-      observations:
-        include-prompt: true
-        include-completion: true
+      client:
+        observations:
+          log-prompt: true
+          log-completion: true
+          include-error-loggin: true
+          log-query-response: true
+
   application:
     name: spring-ai-proposalgen-example
   docker:
@@ -74,4 +72,11 @@ spring:
       stop:
         command: down
         arguments: -v
+      enabled: false
+
+
+management:
+  tracing:
+    enabled: false
+    zipkin:
       enabled: false

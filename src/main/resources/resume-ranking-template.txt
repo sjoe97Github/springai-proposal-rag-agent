@@ -22,5 +22,5 @@ IMPORTANT:
     5. The "candidateId" field should contain the full resume file name.
     6. Remember, do NOT return code and DO NOT explain your process.
 
-ONLY return a valid JSON array like this (with doubled curly braces):
+ONLY return a valid JSON array like this:
 [{{"candidateId":"candidate-id", "finalScore": 85, "shortExplanation":"Reason for score", "linkedin": null, "github": null }}]
