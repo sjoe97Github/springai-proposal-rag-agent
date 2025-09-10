@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "github-repos-manager": {
+      "command": "/Users/sjohnson/.nvm/versions/node/v18.20.6/bin/node",
+      "args": ["/Users/sjohnson/mydev/experiments/github-repos-manager-mcp/server.cjs"],
+      "env": {
+        "GH_TOKEN": ""
+      }
+    }
+  }
+}
