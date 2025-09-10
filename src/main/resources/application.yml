@@ -45,25 +45,31 @@ spring:
         index-type: HNSW
         distance-type: COSINE_DISTANCE
 
-    mcp:
+  user:
+    input: What tools are available?
+
+  mcp:
       client:
         enabled: true
+        toolcallback:
+          enabled: true
         stdio:
-          connections:
-            local-mcp-service:
-                command: /Users/sjohnson/.nvm/versions/node/v18.20.6/bin/node
-                args:
-                  - /Users/sjohnson/mydev/experiments/github-repos-manager-mcp/server.cjs
-                env:
-                  GH_TOKEN: ${GH_TOKEN}
+          servers-configuration: classpath:mcp-servers.json
 
-    chat:
-      client:
-        observations:
-          log-prompt: true
-          log-completion: true
-          include-error-loggin: true
-          log-query-response: true
+#          connections:
+#            local-mcp-service:
+#                command: /Users/sjohnson/.nvm/versions/node/v18.20.6/bin/node
+#                args:
+#                  - /Users/sjohnson/mydev/experiments/github-repos-manager-mcp/server.cjs
+#                env:
+#                  GH_TOKEN: ${GH_TOKEN}
+      chat:
+        client:
+          observations:
+            log-prompt: true
+            log-completion: true
+            include-error-loggin: true
+            log-query-response: true
 
   application:
     name: spring-ai-proposalgen-example

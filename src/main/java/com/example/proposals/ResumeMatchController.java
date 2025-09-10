@@ -56,140 +56,24 @@ public class ResumeMatchController {
 
     private final ApplicationContext applicationContext;
 
-//    @PostConstruct
-    public void checkTools() {
-        // Check if MCP client beans exist
-        System.out.println("=== MCP Debug Information ===");
-
-        Object mcpSyncClients = applicationContext.getBean("mcpSyncClients");
-        System.out.println("Found mcpSyncClients bean: " + mcpSyncClients.getClass().getName());
-
-        if (mcpSyncClients instanceof List) {
-            List<?> clientsList = (List<?>) mcpSyncClients;
-            System.out.println("MCP clients found: " + clientsList.size());
-
-            for (int i = 0; i < clientsList.size(); i++) {
-                Object client = clientsList.get(i);
-                System.out.println("MCP Client[" + i + "]: " + client.getClass().getName());
-
-                // Check if it's a SyncMcpClient or has access to tools
-                if (client instanceof McpSyncClient) {
-                    McpSyncClient syncClient = (McpSyncClient) client;
-                    syncClient.listTools().tools().forEach(tool -> {
-                        System.out.printf("  - Tool: %s, Description: %s%n", tool.name(), tool.description());
-                        try {
-                            McpSchema.JsonSchema schema = tool.inputSchema();
-                            System.out.println("    Input Schema: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema));
-                        } catch (JsonProcessingException e) {
-                            System.err.println("    Failed to parse input schema for tool " + tool.name() + ": " + e.getMessage());
-                        }
-                    });
-                }
-            }
-        }
-
-        try {
-            ToolCallbackProvider toolProvider = applicationContext.getBean(ToolCallbackProvider.class);
-            System.out.println("Found ToolCallbackProvider: " + toolProvider.getClass().getName());
-
-            ToolCallback[] callbacks = toolProvider.getToolCallbacks();
-            System.out.println("Available tools: " + callbacks.length);
-
-            for (ToolCallback callback : callbacks) {
-                ToolDefinition def = callback.getToolDefinition();
-                System.out.println("  - Tool: " + def.name() + " | " + def.description());
-            }
-
-        } catch (Exception e) {
-            System.out.println("No ToolCallbackProvider found: " + e.getMessage());
-        }
-
-        // Check all beans
-        String[] allBeans = applicationContext.getBeanNamesForType(Object.class);
-        System.out.println("Total beans: " + allBeans.length);
-
-        // Filter for MCP-related beans
-        List<String> mcpBeans = Arrays.stream(allBeans)
-                .filter(name -> name.toLowerCase().contains("mcp") ||
-                        name.toLowerCase().contains("tool") ||
-                        name.toLowerCase().contains("stdio") ||
-                        name.toLowerCase().contains("client"))
-                .collect(Collectors.toList());
-
-        System.out.println("MCP/Tool-related beans found: " + mcpBeans.size());
-        mcpBeans.forEach(System.out::println);
-
-        // Check ChatClient details
-        System.out.println("ChatClient class: " + aiClient.getClass().getName());
-
-        // Check if MCP client beans are actually created
-        try {
-            Object mcpClient = applicationContext.getBean("spring.ai.mcp.client.stdio.connections.local-mcp-service");
-            System.out.println("MCP client bean found: " + mcpClient.getClass().getName());
-        } catch (Exception e) {
-            System.err.println("Error checking MCP setup: " + e.getMessage());
-        }
-    }
-
-    public ResumeMatchController(ChatClient.Builder chatClientBuilder, VectorStore vectorStore, ResumeAgent resumeAgent, ApplicationContext applicationContext) {
+//    public ResumeMatchController(ChatClient.Builder chatClientBuilder, VectorStore vectorStore, ResumeAgent resumeAgent, ApplicationContext applicationContext) {
+//        this.resumeAgent = resumeAgent;
+//        this.vectorStore = vectorStore;
+//        this.applicationContext = applicationContext;
+//
+//        // Create ChatClient with MCP tools
+//        this.aiClient = createChatClientWithMcpTools(chatClientBuilder);
+//    }
+    public ResumeMatchController(ChatClient.Builder chatClientBuilder, ToolCallbackProvider tools, VectorStore vectorStore, ResumeAgent resumeAgent, ApplicationContext applicationContext) {
         this.resumeAgent = resumeAgent;
         this.vectorStore = vectorStore;
         this.applicationContext = applicationContext;
 
         // Create ChatClient with MCP tools
-        this.aiClient = createChatClientWithMcpTools(chatClientBuilder);
-    }
-
-    private ChatClient createChatClientWithMcpTools(ChatClient.Builder chatClientBuilder) {
-        try {
-            // Get the MCP sync clients
-            Object mcpSyncClients = applicationContext.getBean("mcpSyncClients");
-
-            if (mcpSyncClients instanceof List) {
-                List<?> clientsList = (List<?>) mcpSyncClients;
-                List<ToolCallback> allToolCallbacks = new ArrayList<>();
-
-                for (Object client : clientsList) {
-                    if (client instanceof McpSyncClient) {
-                        McpSyncClient syncClient = (McpSyncClient) client;
-
-                        // Get all tools from this MCP client
-                        var toolsResponse = syncClient.listTools();
-
-                        // Create SyncMcpToolCallback for each tool
-                        for (var tool : toolsResponse.tools()) {
-                            SyncMcpToolCallback toolCallback = new SyncMcpToolCallback(syncClient, tool);
-                            allToolCallbacks.add(toolCallback);
-                            System.out.println("Registered MCP tool: " + tool.name());
-                        }
-                    }
-                }
-
-                // Check all MCP-related beans
-                String[] allBeans = applicationContext.getBeanDefinitionNames();
-                System.out.println("\nAll registered beans containing 'mcp' or 'tool':");
-                Arrays.stream(allBeans)
-                        .filter(name -> name.toLowerCase().contains("mcp") ||
-                                name.toLowerCase().contains("tool"))
-                        .forEach(beanName -> {
-                            Object bean = applicationContext.getBean(beanName);
-                            System.out.println(" - " + beanName + ": " + bean.getClass().getName());
-                        });
-                if (!allToolCallbacks.isEmpty()) {
-                    System.out.println("Creating ChatClient with " + allToolCallbacks.size() + " MCP tools");
-                    return chatClientBuilder
-                            .defaultToolCallbacks(allToolCallbacks.toArray(new ToolCallback[0]))
-                            .build();
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Error setting up MCP tools: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        // Fallback to regular ChatClient without tools
-        System.out.println("Creating ChatClient without MCP tools");
-        return chatClientBuilder.build();
+        this.aiClient = chatClientBuilder
+                .defaultSystem("Answer all questions with complete sentences.")
+                .defaultToolCallbacks(tools)
+                .build();
     }
 
     @PostMapping("/query")
@@ -251,14 +135,9 @@ public class ResumeMatchController {
 //            Do not fabricate the response.
 //        """;
         String experimentalPromptText = """
-    Get repositories for https://github.com/sjoe97Github.
-    Call the tool with these exact parameters:
-    - per_page: 10
-    - visibility: all
-    - sort: updated
-    
-    Execute the tool and return the actual response data.
-    """;
+                Get repositories for the owner of https://github.com/sjoe97Github.
+                Execute the tool and return the actual response data, not made up response.
+            """;
         ChatResponse chatResponse = aiClient.prompt(PromptTemplate.builder().template(experimentalPromptText).build()
                     .create()).toolNames("list_repos").call().chatResponse();
 
@@ -391,6 +270,133 @@ public class ResumeMatchController {
             }
         }
         return uniqueResumes;
+    }
+
+    private ChatClient createChatClientWithMcpTools(ChatClient.Builder chatClientBuilder) {
+        try {
+            // Get the MCP sync clients
+            Object mcpSyncClients = applicationContext.getBean("mcpSyncClients");
+
+            if (mcpSyncClients instanceof List) {
+                List<?> clientsList = (List<?>) mcpSyncClients;
+                List<ToolCallback> allToolCallbacks = new ArrayList<>();
+
+                for (Object client : clientsList) {
+                    if (client instanceof McpSyncClient) {
+                        McpSyncClient syncClient = (McpSyncClient) client;
+
+                        // Get all tools from this MCP client
+                        var toolsResponse = syncClient.listTools();
+
+                        // Create SyncMcpToolCallback for each tool
+                        for (var tool : toolsResponse.tools()) {
+                            SyncMcpToolCallback toolCallback = new SyncMcpToolCallback(syncClient, tool);
+                            allToolCallbacks.add(toolCallback);
+                            System.out.println("Registered MCP tool: " + tool.name());
+                        }
+                    }
+                }
+
+                // Check all MCP-related beans
+                String[] allBeans = applicationContext.getBeanDefinitionNames();
+                System.out.println("\nAll registered beans containing 'mcp' or 'tool':");
+                Arrays.stream(allBeans)
+                        .filter(name -> name.toLowerCase().contains("mcp") ||
+                                name.toLowerCase().contains("tool"))
+                        .forEach(beanName -> {
+                            Object bean = applicationContext.getBean(beanName);
+                            System.out.println(" - " + beanName + ": " + bean.getClass().getName());
+                        });
+                if (!allToolCallbacks.isEmpty()) {
+                    System.out.println("Creating ChatClient with " + allToolCallbacks.size() + " MCP tools");
+                    return chatClientBuilder
+                            .defaultToolCallbacks(allToolCallbacks.toArray(new ToolCallback[0]))
+                            .build();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error setting up MCP tools: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        // Fallback to regular ChatClient without tools
+        System.out.println("Creating ChatClient without MCP tools");
+        return chatClientBuilder.build();
+    }
+
+    //@PostConstruct
+    public void checkTools() {
+        // Check if MCP client beans exist
+        System.out.println("=== MCP Debug Information ===");
+
+        Object mcpSyncClients = applicationContext.getBean("mcpSyncClients");
+        System.out.println("Found mcpSyncClients bean: " + mcpSyncClients.getClass().getName());
+
+        if (mcpSyncClients instanceof List) {
+            List<?> clientsList = (List<?>) mcpSyncClients;
+            System.out.println("MCP clients found: " + clientsList.size());
+
+            for (int i = 0; i < clientsList.size(); i++) {
+                Object client = clientsList.get(i);
+                System.out.println("MCP Client[" + i + "]: " + client.getClass().getName());
+
+                // Check if it's a SyncMcpClient or has access to tools
+                if (client instanceof McpSyncClient) {
+                    McpSyncClient syncClient = (McpSyncClient) client;
+                    syncClient.listTools().tools().forEach(tool -> {
+                        System.out.printf("  - Tool: %s, Description: %s%n", tool.name(), tool.description());
+                        try {
+                            McpSchema.JsonSchema schema = tool.inputSchema();
+                            System.out.println("    Input Schema: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema));
+                        } catch (JsonProcessingException e) {
+                            System.err.println("    Failed to parse input schema for tool " + tool.name() + ": " + e.getMessage());
+                        }
+                    });
+                }
+            }
+        }
+
+        try {
+            ToolCallbackProvider toolProvider = applicationContext.getBean(ToolCallbackProvider.class);
+            System.out.println("Found ToolCallbackProvider: " + toolProvider.getClass().getName());
+
+            ToolCallback[] callbacks = toolProvider.getToolCallbacks();
+            System.out.println("Available tools: " + callbacks.length);
+
+            for (ToolCallback callback : callbacks) {
+                ToolDefinition def = callback.getToolDefinition();
+                System.out.println("  - Tool: " + def.name() + " | " + def.description());
+            }
+
+        } catch (Exception e) {
+            System.out.println("No ToolCallbackProvider found: " + e.getMessage());
+        }
+
+        // Check all beans
+        String[] allBeans = applicationContext.getBeanNamesForType(Object.class);
+        System.out.println("Total beans: " + allBeans.length);
+
+        // Filter for MCP-related beans
+        List<String> mcpBeans = Arrays.stream(allBeans)
+                .filter(name -> name.toLowerCase().contains("mcp") ||
+                        name.toLowerCase().contains("tool") ||
+                        name.toLowerCase().contains("stdio") ||
+                        name.toLowerCase().contains("client"))
+                .collect(Collectors.toList());
+
+        System.out.println("MCP/Tool-related beans found: " + mcpBeans.size());
+        mcpBeans.forEach(System.out::println);
+
+        // Check ChatClient details
+        System.out.println("ChatClient class: " + aiClient.getClass().getName());
+
+        // Check if MCP client beans are actually created
+        try {
+            Object mcpClient = applicationContext.getBean("spring.ai.mcp.client.stdio.connections.local-mcp-service");
+            System.out.println("MCP client bean found: " + mcpClient.getClass().getName());
+        } catch (Exception e) {
+            System.err.println("Error checking MCP setup: " + e.getMessage());
+        }
     }
 }
 

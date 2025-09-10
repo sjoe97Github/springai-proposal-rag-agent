@@ -5,6 +5,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+python_example/
+data/
+resume-matcher.py
+
 ### STS ###
 .apt_generated
 .classpath
