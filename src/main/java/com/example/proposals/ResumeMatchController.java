@@ -2,18 +2,24 @@ package com.example.proposals;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.mcp.SyncMcpToolCallback;
+import org.springframework.ai.model.ModelResponse;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -21,6 +27,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,16 +40,23 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/resume-match")
 public class ResumeMatchController {
+    // Add Class level logger
+    Logger logger = LoggerFactory.getLogger(ResumeMatchController.class);
 
-    @Value("${spring.ai.ollama.embedding.options.top-k}")
+//    @Value("${spring.ai.ollama.embedding.options.top-k}")
+    @Value("${spring.ai.openai.embedding.options.top-k}")
     private int topK;
 
     @Value("classpath:/resume-ranking-template.txt")
     private Resource defaultPromptTemplate;
 
+    @Value("classpath:/mcp-repos-system-context.txt")
+    private Resource mcpReposSystemContext;
+
     private final ResumeAgent resumeAgent;
 
     private final ChatClient aiClient;
+    private final ChatClient githubMcpServerChatClient;
     private final VectorStore vectorStore;
 //    private final ToolCallbackProvider toolCallbackProvider;
 
@@ -64,7 +78,12 @@ public class ResumeMatchController {
 //        // Create ChatClient with MCP tools
 //        this.aiClient = createChatClientWithMcpTools(chatClientBuilder);
 //    }
-    public ResumeMatchController(ChatClient.Builder chatClientBuilder, ToolCallbackProvider tools, VectorStore vectorStore, ResumeAgent resumeAgent, ApplicationContext applicationContext) {
+    public ResumeMatchController(ChatClient.Builder chatClientBuilder,
+                                 ChatClient githubMcpServerChatClient,
+                                 ToolCallbackProvider tools,
+                                 VectorStore vectorStore,
+                                 ResumeAgent resumeAgent,
+                                 ApplicationContext applicationContext) {
         this.resumeAgent = resumeAgent;
         this.vectorStore = vectorStore;
         this.applicationContext = applicationContext;
@@ -74,6 +93,8 @@ public class ResumeMatchController {
                 .defaultSystem("Answer all questions with complete sentences.")
                 .defaultToolCallbacks(tools)
                 .build();
+
+        this.githubMcpServerChatClient = githubMcpServerChatClient;
     }
 
     @PostMapping("/query")
@@ -91,13 +112,6 @@ public class ResumeMatchController {
         UserMessage userMessage = new UserMessage(query.getQuery());
         chatHistory.add(userMessage);
 
-//        // Search for similar resumes
-//        SearchRequest searchRequest = SearchRequest.builder()
-////                .topK(topK)
-//                .query(userMessage)
-//                .build();
-//
-//        List<Document> similarResumes = vectorStore.similaritySearch(searchRequest);
         List<Document> similarResumes = resumeAgent.relevantResumes(query.getQuery(), false);
 
         // TODO - Null check similarResumes?
@@ -117,9 +131,9 @@ public class ResumeMatchController {
 
         Prompt prompt = template.create(params);
 
-        System.out.println("\nPrompt:\n" + prompt);
+        logger.info("Prompt: {}", prompt);
 
-//        ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
+        ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
 
 //        String experimentalPromptText = """
 //            In the curl statement, `curl -s https://api.github.com/users/user_segment/repos`, replace the `user-segment` portion of the url with
@@ -134,17 +148,17 @@ public class ResumeMatchController {
 //            Show the tool request and response.
 //            Do not fabricate the response.
 //        """;
-        String experimentalPromptText = """
-                Get repositories for the owner of https://github.com/sjoe97Github.
-                Execute the tool and return the actual response data, not made up response.
-            """;
-        ChatResponse chatResponse = aiClient.prompt(PromptTemplate.builder().template(experimentalPromptText).build()
-                    .create()).toolNames("list_repos").call().chatResponse();
-
+//        String experimentalPromptText = """
+//                Get repositories for the owner of https://github.com/sjoe97Github.
+//                Execute the tool and return the actual response data, not made up response.
+//            """;
+//        ChatResponse chatResponse = aiClient.prompt(PromptTemplate.builder().template(experimentalPromptText).build()
+//                    .create()).toolNames("list_repos").call().chatResponse();
+//
         // Get AI response
         String response = chatResponse.getResult().getOutput().getText();
 
-        System.out.println("\n\nAI Response: " + response);
+        logger.info("AI Response: {}", response);
 
         // Add to chat history
         chatHistory.add(new AssistantMessage(response));
@@ -166,7 +180,7 @@ public class ResumeMatchController {
             resumeResults = objectMapper.readValue(response, ResumeResult[].class);
         } catch (JsonProcessingException e) {
             // TODO - Use a logging framework
-            System.err.println("Failed to parse AI response: " + e.getMessage());
+            logger.warn("Failed to parse AI response: {}", e.getMessage());
         }
 
         // Create response
@@ -175,27 +189,106 @@ public class ResumeMatchController {
             query.getQuery(),
             resumeResults != null ? Arrays.asList(resumeResults) : Collections.emptyList()
         );
-        System.out.println("\n\nresult: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
+        logger.info("result: {}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
 
         // for each resume result, extract candidateId, linkedin, and github fields if present.
-        experimentalPromptText = """
-            Use the tool `spring_ai_mcp_client_local_mcp_service_list_repos` to list all repositories for %s.
-            Return only the tool result, not code.
-        """;
         for (ResumeResult rr : result.results()) {
-            System.out.printf("CandidateID: %s, LinkedIn: %s, GitHub: %s%n",
+            logger.info("CandidateID: {}, LinkedIn: {}, GitHub: {}}",
                     rr.candidateId(),
                     rr.linkedin() != null ? rr.linkedin().toString() : "N/A",
                     rr.github() != null ? rr.github().toString() : "N/A");
 
+            String repos = "No Repos";
             if (rr.github() != null) {
-                String reposPrompt = String.format(experimentalPromptText, rr.github());
-                ChatResponse reposChatResponse = aiClient.prompt(PromptTemplate.builder().template(reposPrompt).build().create()).call().chatResponse();
-                String reposResponse = reposChatResponse.getResult().getOutput().getText();
-                System.out.printf("\nGitHub Repos for candidate={%s}:\n{%s}\n\n", rr.candidateId(), reposResponse);
+                repos = getRepositories(rr);
+            } else {
+                repos = getRepositories("https://github.com/ai-ml-workshops", rr.candidateId());
             }
+            logger.debug("Repos for candidate {}: {}", rr.candidateId(), repos);
         }
+
         return result;
+    }
+
+    private String getRepositories(ResumeResult resumeResult) {
+        return getRepositories(resumeResult.github().toString(), resumeResult.candidateId());
+    }
+
+    private String getRepositories(String githubUrl, String candidateId) {
+        String response = "No response from AI client for candidate: " + candidateId;
+
+//        String reposPromptTemplate = """
+//            Use the tool `spring_ai_mcp_client_local_mcp_service_list_repos` to list all repositories for user %s.
+//            Return only the tool result, not code.
+//        """;
+        String reposPromptTemplate = """
+            list repositories for the GitHub url: %s
+        """;
+
+        String reposPrompt = String.format(reposPromptTemplate, githubUrl);
+
+        String promptText = getMcpReposSystemContext();
+        logger.debug("GitHub MCP Client System context: {}", promptText);
+
+//        ChatResponse reposChatResponse = githubMcpServerChatClient.prompt(PromptTemplate.builder()
+//                .template(reposPrompt).build().create())
+//                .system(promptText).call().chatResponse();
+        ChatResponse reposChatResponse = githubMcpServerChatClient.prompt(PromptTemplate.builder()
+                .template(reposPrompt).build().create())
+                .call().chatResponse();
+
+        if (reposChatResponse != null) {
+            // Guard against null result
+            Generation generatedResponse = reposChatResponse.getResult();
+            response = generatedResponse.getOutput().getText();
+
+            logger.info("\nGitHub Repos for candidate={}: {}", candidateId, response);
+        } else {
+            logger.warn(response);
+        }
+
+
+        return response;
+    }
+
+    private String getMcpReposSystemContext() {
+        try {
+            return new String(mcpReposSystemContext.getInputStream().readAllBytes());
+        } catch (IOException e) {
+            // Fallback ...
+            return """
+                You are a helpful GitHub research assistant.
+                You may call the "list_repos" tool to list user repositories.
+                Only return repository names, URLs, and languages.
+            
+                Use tool results to answer clearly and concisely.
+                Always respond with valid JSON only. No other text allowed.
+                Return the final answer in JSON format similar to this example:
+                {
+                  "answer": [
+                    {
+                      "full_name": "",
+                      "language": "",
+                      "description": null,
+                      "created_at": "2025-01-26T03:36:26Z",
+                      "updated_at": "2025-02-03T13:02:41Z",
+                      "private": false
+                    },
+                    {
+                      "full_name": "",
+                      "url": "",
+                      "language": "",
+                      "description": null,
+                      "created_at": "2025-01-26T03:36:26Z",
+                      "updated_at": "2025-02-03T13:02:41Z",
+                      "private": true
+                    }
+                  ],
+                  "usedTool": "list_repos"
+                  "note": "Some repositories are private and do not have public descriptions."
+                }
+             """;
+        }
     }
 
     @PostMapping("/set-prompt-template")

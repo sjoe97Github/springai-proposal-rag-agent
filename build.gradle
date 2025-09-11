@@ -1,16 +1,17 @@
 plugins {
     id 'org.springframework.boot' version '3.5.4'
-    id 'io.spring.dependency-management' version '1.1.4'
+    id 'io.spring.dependency-management' version '1.1.7'
     id 'java'
 }
 
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
-description = 'Example Proposal Generation using RAG and Spring AI'
+description = 'Example Resume Search using RAG and Spring AI'
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_24
-    targetCompatibility = JavaVersion.VERSION_24
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 repositories {
@@ -28,23 +29,24 @@ dependencyManagement {
 }
 
 dependencies {
-//    implementation platform('org.springframework.ai:spring-ai-bom')
+    implementation 'org.springframework.security:spring-security-oauth2-client'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.ai:spring-ai-advisors-vector-store'
-    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
-    implementation 'org.springframework.ai:spring-ai-tika-document-reader'
+    implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+//    implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
     implementation 'org.springframework.ai:spring-ai-starter-mcp-client'
+    implementation 'org.springframework.ai:spring-ai-tika-document-reader'
 //    implementation 'org.springframework.ai:spring-ai-mcp:1.0.0'
 //    implementation 'org.springframework.ai:spring-ai-spring-boot-autoconfigure'
 //    implementation 'org.springframework.ai:spring-ai-starter-vector-store-qdrant'
 //    implementation 'io.qdrant:client:1.15.0'
-    implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
     implementation 'org.postgresql:postgresql'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+//    implementation 'io.micrometer:micrometer-tracing-bridge-otel'
 //    implementation 'io.opentelemetry:opentelemetry-exporter-zipkin'
 
-    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+//    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

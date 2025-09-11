@@ -13,7 +13,8 @@ import java.util.List;
 @Component
 public class ResumeAgent {
 
-    @Value("${spring.ai.ollama.embedding.options.top-k}")
+//    @Value("${spring.ai.ollama.embedding.options.top-k}")
+    @Value("${spring.ai.openai.embedding.options.top-k}")
     private int topK;
 
     private final VectorStore vectorStore;

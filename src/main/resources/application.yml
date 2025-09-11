@@ -1,9 +1,12 @@
 logging:
   level:
     root: INFO
-    org.springframework.ai: DEBUG
-#    org.springframework.ai.mcp.client: DEBUG
-#    org.springframework.boot.autoconfigure: DEBUG
+    #org.springframework.ai: DEBUG
+    org.springframework.ai.mcp.client: DEBUG
+    #org.springframework.boot.autoconfigure: DEBUG
+
+github-mcp-server-url: http://localhost:8081
+
 app:
   scan:
     recursive: true
@@ -12,7 +15,6 @@ app:
   ingest:
     batchSize: 50
     chunkSize: 1000
-    proposal-resources: file:///Users/sjohnson/shared/data/proposals/seed-proposals
     resume-resources: file:///Users/sjohnson/shared/data/resumes-m5
 
 #  resource: https://en.wikipedia.org/wiki/Chess
@@ -24,16 +26,22 @@ spring:
       url: jdbc:postgresql://localhost/mydatabase
 
   ai:
-    ollama:
-      base-url: http://localhost:11434
+    mcp:
+      client:
+        stdio:
+          servers-configuration: classpath:mcp-servers.json
+
+    openai:
+      api-key: ${OPENAI_API_KEY}
       chat:
         options:
-          model: mervinpraison/llama3.2-3B-instruct:8b
+          model: gpt-4o-mini
           temperature: 0.2
+          max-tokens: 4096
+
       embedding:
         options:
-          model: nomic-embed-text
-          max-tokens: 4096
+          model: text-embedding-ada-002
           top-k: 3
 
     vectorstore:
@@ -41,38 +49,66 @@ spring:
       pgvector:
         remove-existing-vector-store-table: true
         initialize-schema: true
-        dimensions: 768
+        dimensions: 1536
         index-type: HNSW
         distance-type: COSINE_DISTANCE
 
-  user:
-    input: What tools are available?
+#      embedding:
+#        options:
+#          model: nomic-embed-text
+#          max-tokens: 4096
+#          top-k: 3
+#    ollama:
+#      base-url: http://localhost:11434
+#      chat:
+#        options:
+#          model: mervinpraison/llama3.2-3B-instruct:8b
+#          temperature: 0.2
+#
+#    vectorstore:
+#      topk: 5
+#      pgvector:
+#        remove-existing-vector-store-table: true
+#        initialize-schema: true
+#        dimensions: 768
+#        index-type: HNSW
+#        distance-type: COSINE_DISTANCE
+#
+#  user:
+#    input: What tools are available?
 
-  mcp:
-      client:
-        enabled: true
-        toolcallback:
-          enabled: true
-        stdio:
-          servers-configuration: classpath:mcp-servers.json
 
-#          connections:
-#            local-mcp-service:
-#                command: /Users/sjohnson/.nvm/versions/node/v18.20.6/bin/node
-#                args:
-#                  - /Users/sjohnson/mydev/experiments/github-repos-manager-mcp/server.cjs
-#                env:
-#                  GH_TOKEN: ${GH_TOKEN}
-      chat:
-        client:
-          observations:
-            log-prompt: true
-            log-completion: true
-            include-error-loggin: true
-            log-query-response: true
+#      client:
+#        enabled: true
+#        toolcallback:
+#          enabled: true
+#        stdio:
+#          servers-configuration: classpath:mcp-servers.json
+#
+##          connections:
+##            local-mcp-service:
+##                command: /Users/sjohnson/.nvm/versions/node/v18.20.6/bin/node
+##                args:
+##                  - /Users/sjohnson/mydev/experiments/github-repos-manager-mcp/server.cjs
+##                env:
+##                  GH_TOKEN: ${GH_TOKEN}
+#      chat:
+#        client:
+#          observations:
+#            log-prompt: true
+#            log-completion: true
+#            include-error-loggin: true
+#            log-query-response: true
+#
+#management:
+#  tracing:
+#    enabled: false
+#    zipkin:
+#      enabled: false
 
   application:
     name: spring-ai-proposalgen-example
+
   docker:
     compose:
       stop:
@@ -80,9 +116,3 @@ spring:
         arguments: -v
       enabled: false
 
-
-management:
-  tracing:
-    enabled: false
-    zipkin:
-      enabled: false

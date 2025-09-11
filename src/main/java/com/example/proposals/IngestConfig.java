@@ -10,14 +10,6 @@ import org.springframework.core.io.Resource;
 @Configuration
 public class IngestConfig {
 
-    @Bean("fileSystemProposalIngest")
-    public IngestResources fileSystemIngest(
-            @Value("${app.ingest.proposal-resources}") Resource documentResource,
-            @Value("${app.scan.recursive:true}") boolean recursive,
-            @Value("${app.scan.extensions:txt,pdf,doc,docx,md,html}") String includeExtensions) {
-        return new FileSystemIngest(documentResource, recursive, includeExtensions);
-    }
-
     @Bean("fileSystemResumeIngest")
     public IngestResources fileSystemResumeIngest(
             @Value("${app.ingest.resume-resources}") Resource documentResource,
