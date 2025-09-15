@@ -13,6 +13,7 @@ app:
     extensions: pdf,txt,docx
 
   ingest:
+    skipResumeIngest: false
     batchSize: 50
     # Must be smaller the maximum tokens for embedding model, larger -> irrelevant content, smaller -> more meaningful content.
     #   Experiment with different values to find the best balance for resume matching.

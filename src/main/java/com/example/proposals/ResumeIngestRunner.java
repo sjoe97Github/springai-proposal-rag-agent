@@ -37,7 +37,9 @@ public class ResumeIngestRunner {
         return chatClientBuilder.build();
     }
 
-    // Batch size for pushing to the vector store
+    @Value("${app.ingest.skipResumeIngest:false}")
+    private boolean skipResumeIngest;
+
     @Value("${app.ingest.batchSize}")
     private int batchSize;
 
@@ -55,37 +57,39 @@ public class ResumeIngestRunner {
     ApplicationRunner initialize(VectorStore vectorStore,
                                  @Qualifier("fileSystemResumeIngest") IngestResources resourceIngest) {
         return args -> {
-            TextSplitter splitter = TokenTextSplitter.builder().withChunkSize(chunkSize).build();
+            if (!skipResumeIngest) {
+                TextSplitter splitter = TokenTextSplitter.builder().withChunkSize(chunkSize).build();
 
-            List<Resource> fileResources = resourceIngest.getResources();
+                List<Resource> fileResources = resourceIngest.getResources();
 
-            // Read → split → index in batches
-            List<Document> buffer = new ArrayList<>(batchSize);
-            for (Resource res : fileResources) {
-                // TikaDocumentReader(res).get() reads the file resource res and returns a List<Document>,
-                // where each Document represents the content extracted from the file which is often a single document
-                // per file, but there could be more than one document depending on the file type.
-                List<Document> docs = new TikaDocumentReader(res).get();
+                // Read → split → index in batches
+                List<Document> buffer = new ArrayList<>(batchSize);
+                for (Resource res : fileResources) {
+                    // TikaDocumentReader(res).get() reads the file resource res and returns a List<Document>,
+                    // where each Document represents the content extracted from the file which is often a single document
+                    // per file, but there could be more than one document depending on the file type.
+                    List<Document> docs = new TikaDocumentReader(res).get();
 
-                // splitter.apply(docs) takes the list of Document objects and splits their text content into
-                // smaller chunks, according to the chunkSize specified when building the TokenTextSplitter.
-                // It returns a new List<Document>, where each Document contains a chunk of the original text
-                List<Document> splitDocs = splitter.apply(docs);
+                    // splitter.apply(docs) takes the list of Document objects and splits their text content into
+                    // smaller chunks, according to the chunkSize specified when building the TokenTextSplitter.
+                    // It returns a new List<Document>, where each Document contains a chunk of the original text
+                    List<Document> splitDocs = splitter.apply(docs);
 
-                // TODO - Consider eliminating the splitDocs references and just put the splitter.apply(docs)
-                //        directly into the ResourceChunker call.
-                List<Document> overlappingSplits = ResourceChunker.overlappingChunk(splitDocs, chunkSize, overlapSize);
+                    // TODO - Consider eliminating the splitDocs references and just put the splitter.apply(docs)
+                    //        directly into the ResourceChunker call.
+                    List<Document> overlappingSplits = ResourceChunker.overlappingChunk(splitDocs, chunkSize, overlapSize);
 
-                for (Document d : overlappingSplits) {
-                    buffer.add(d);
-                    if (buffer.size() >= batchSize) {
-                        vectorStore.accept(buffer);
-                        buffer.clear();
+                    for (Document d : overlappingSplits) {
+                        buffer.add(d);
+                        if (buffer.size() >= batchSize) {
+                            vectorStore.accept(buffer);
+                            buffer.clear();
+                        }
                     }
                 }
-            }
-            if (!buffer.isEmpty()) {
-                vectorStore.accept(buffer);
+                if (!buffer.isEmpty()) {
+                    vectorStore.accept(buffer);
+                }
             }
         };
     }

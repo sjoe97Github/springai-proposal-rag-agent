@@ -36,3 +36,8 @@ build/
 
 ### VS Code ###
 .vscode/
+**/.vscode/*
+**/.history/*
+
+# Ignore node_modules in subfolders
+**/node_modules/*
