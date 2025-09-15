@@ -2,13 +2,13 @@ package com.example.proposals;
 
 import java.util.*;
 
+import ingest.ChatPromptSystemContext;
 import ingest.IngestResources;
+import ingest.ResourceChunker;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
@@ -24,7 +24,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.Resource;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 @SpringBootApplication
 public class ResumeIngestRunner {
@@ -45,23 +44,39 @@ public class ResumeIngestRunner {
     @Value("${app.ingest.chunkSize}")
     private int chunkSize;
 
+    @Value("${app.ingest.overlapSize}")
+    private int overlapSize;
+
     @Autowired
-    @Qualifier("fileSystemResumeIngest")
-    private IngestResources fileSystemIngest;
+    @Qualifier("githubPromptSystemContext")
+    private ChatPromptSystemContext gitHubLookupSystemContext;
 
     @Bean
-    ApplicationRunner applicationRunner(VectorStore vectorStore) {
+    ApplicationRunner initialize(VectorStore vectorStore,
+                                 @Qualifier("fileSystemResumeIngest") IngestResources resourceIngest) {
         return args -> {
             TextSplitter splitter = TokenTextSplitter.builder().withChunkSize(chunkSize).build();
 
-            List<Resource> fileResources = fileSystemIngest.getResources();
+            List<Resource> fileResources = resourceIngest.getResources();
 
             // Read → split → index in batches
             List<Document> buffer = new ArrayList<>(batchSize);
             for (Resource res : fileResources) {
+                // TikaDocumentReader(res).get() reads the file resource res and returns a List<Document>,
+                // where each Document represents the content extracted from the file which is often a single document
+                // per file, but there could be more than one document depending on the file type.
                 List<Document> docs = new TikaDocumentReader(res).get();
+
+                // splitter.apply(docs) takes the list of Document objects and splits their text content into
+                // smaller chunks, according to the chunkSize specified when building the TokenTextSplitter.
+                // It returns a new List<Document>, where each Document contains a chunk of the original text
                 List<Document> splitDocs = splitter.apply(docs);
-                for (Document d : splitDocs) {
+
+                // TODO - Consider eliminating the splitDocs references and just put the splitter.apply(docs)
+                //        directly into the ResourceChunker call.
+                List<Document> overlappingSplits = ResourceChunker.overlappingChunk(splitDocs, chunkSize, overlapSize);
+
+                for (Document d : overlappingSplits) {
                     buffer.add(d);
                     if (buffer.size() >= batchSize) {
                         vectorStore.accept(buffer);
@@ -74,6 +89,7 @@ public class ResumeIngestRunner {
             }
         };
     }
+
     @Bean
     ApplicationRunner toolDebugger(ChatClient chatClient) {
         return args -> {
@@ -98,38 +114,10 @@ public class ResumeIngestRunner {
     ChatClient githubMcpServerChatClient(
             ChatClient.Builder builder,
             McpSyncClient githubMcpSyncClient
-    ) {
-
-//        var system = """
-//                You are an AI powered assistant to help people adopt a dog from the adoption\s
-//                agency named Pooch Palace with locations in Antwerp, Seoul, Tokyo, Singapore, Paris,\s
-//                Mumbai, New Delhi, Barcelona, San Francisco, and London. Information about the dogs available\s
-//                will be presented below. If there is no information, then return a polite response suggesting we\s
-//                don't have any dogs available.
-//                """;
-        var system = """
-                You are a helpful GitHub research assistant.
-                You may call the "list_repos" tool to list user repositories.
-                Only return repository names, URLs, and languages.
-                Include repositories that were forked from another repository.
-            
-                Use tool results to answer clearly and concisely.
-                Always respond with valid JSON only. No other text allowed.
-                The tool returns a list of repositories in a JSON format similar to this example:
-                [
-                    {
-                        "url":"https://github.com/bswanson58/NoiseMusicSystem",
-                        "visibility":"PUBLIC",
-                        "language":"C#",
-                        "createdAt":1372698378.000000000,
-                        "updatedAt":1676375106.000000000,
-                        "pushedAt":1697816613.000000000
-                    }
-                ]
-                """;
+            ) {
         return builder
                 .defaultToolCallbacks(new SyncMcpToolCallbackProvider(githubMcpSyncClient))
-                .defaultSystem(system)
+                .defaultSystem(gitHubLookupSystemContext.getSystemContext())
                 .build();
     }
 }

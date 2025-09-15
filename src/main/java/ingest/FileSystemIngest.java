@@ -1,7 +1,5 @@
 package ingest;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 
@@ -14,9 +12,9 @@ import java.util.stream.Stream;
 
 public class FileSystemIngest implements IngestResources {
 
-    private Resource documentResource;
-    private boolean recursive;
-    private String includeExts;
+    private final Resource documentResource;
+    private final boolean recursive;
+    private final String includeExts;
 
     public FileSystemIngest(Resource documentResource, boolean recursive, String includeExtensions) {
         this.documentResource = documentResource;

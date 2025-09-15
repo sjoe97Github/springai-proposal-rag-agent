@@ -2,11 +2,9 @@ package com.example.proposals;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.modelcontextprotocol.client.McpClient;
+import ingest.ChatPromptSystemContext;
 import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
-import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -19,16 +17,17 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.mcp.SyncMcpToolCallback;
-import org.springframework.ai.model.ModelResponse;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -40,6 +39,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/resume-match")
 public class ResumeMatchController {
+    private final ChatPromptSystemContext githubPromptSystemContext;
     // Add Class level logger
     Logger logger = LoggerFactory.getLogger(ResumeMatchController.class);
 
@@ -52,6 +52,15 @@ public class ResumeMatchController {
 
     @Value("classpath:/mcp-repos-system-context.txt")
     private Resource mcpReposSystemContext;
+
+
+    @Autowired
+    @Qualifier("githubPromptSystemContext")
+    private ChatPromptSystemContext gitHubLookupSystemContext;
+
+    @Autowired
+    @Qualifier("linkedInPromptSystemContext")
+    private ChatPromptSystemContext linkedInPromptSystemContext;
 
     private final ResumeAgent resumeAgent;
 
@@ -83,7 +92,7 @@ public class ResumeMatchController {
                                  ToolCallbackProvider tools,
                                  VectorStore vectorStore,
                                  ResumeAgent resumeAgent,
-                                 ApplicationContext applicationContext) {
+                                 ApplicationContext applicationContext, ChatPromptSystemContext githubPromptSystemContext) {
         this.resumeAgent = resumeAgent;
         this.vectorStore = vectorStore;
         this.applicationContext = applicationContext;
@@ -95,6 +104,7 @@ public class ResumeMatchController {
                 .build();
 
         this.githubMcpServerChatClient = githubMcpServerChatClient;
+        this.githubPromptSystemContext = githubPromptSystemContext;
     }
 
     @PostMapping("/query")
@@ -227,14 +237,13 @@ public class ResumeMatchController {
 
         String reposPrompt = String.format(reposPromptTemplate, githubUrl);
 
-        String promptText = getMcpReposSystemContext();
-        logger.debug("GitHub MCP Client System context: {}", promptText);
+        //String promptText = getMcpReposSystemContext();
+        //logger.debug("GitHub MCP Client System context: {}", promptText);
+        logger.info("GitHub MCP Client System context: {}", gitHubLookupSystemContext.getSystemContext());
 
-//        ChatResponse reposChatResponse = githubMcpServerChatClient.prompt(PromptTemplate.builder()
-//                .template(reposPrompt).build().create())
-//                .system(promptText).call().chatResponse();
         ChatResponse reposChatResponse = githubMcpServerChatClient.prompt(PromptTemplate.builder()
                 .template(reposPrompt).build().create())
+                .system(gitHubLookupSystemContext.getSystemContext())
                 .call().chatResponse();
 
         if (reposChatResponse != null) {
@@ -251,58 +260,38 @@ public class ResumeMatchController {
         return response;
     }
 
-    private String getMcpReposSystemContext() {
-        try {
-            return new String(mcpReposSystemContext.getInputStream().readAllBytes());
-        } catch (IOException e) {
-            // Fallback ...
-            return """
-                You are a helpful GitHub research assistant.
-                You may call the "list_repos" tool to list user repositories.
-                Only return repository names, URLs, and languages.
-            
-                Use tool results to answer clearly and concisely.
-                Always respond with valid JSON only. No other text allowed.
-                Return the final answer in JSON format similar to this example:
-                {
-                  "answer": [
-                    {
-                      "full_name": "",
-                      "language": "",
-                      "description": null,
-                      "created_at": "2025-01-26T03:36:26Z",
-                      "updated_at": "2025-02-03T13:02:41Z",
-                      "private": false
-                    },
-                    {
-                      "full_name": "",
-                      "url": "",
-                      "language": "",
-                      "description": null,
-                      "created_at": "2025-01-26T03:36:26Z",
-                      "updated_at": "2025-02-03T13:02:41Z",
-                      "private": true
-                    }
-                  ],
-                  "usedTool": "list_repos"
-                  "note": "Some repositories are private and do not have public descriptions."
-                }
-             """;
+    @PostMapping("/context/set/{sessionId}")
+    public ResponseEntity<Void> setGitHubPromptContext(@RequestBody PromptContext request,
+                                                       @PathVariable String sessionId,
+                                                       @RequestParam(required = true) String type) {
+
+        switch (type) {
+            case "github" -> githubPromptSystemContext.setSystemContext(request.context());
+            case "linkedin" -> linkedInPromptSystemContext.setSystemContext(request.context());
+            default -> {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
         }
+
+        return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/set-prompt-template")
-    public Map<String, String> setCustomPromptTemplate(@RequestBody PromptTemplateRequest request) {
-        customPromptTemplates.put(request.getSessionId(), request.getPromptTemplate());
-
-        return Map.of(
-                "status", "success",
-                "message", "Custom prompt template set successfully",
-                "sessionId", request.getSessionId()
-        );
+    @GetMapping("/context/get/{sessionId}")
+    public ResponseEntity<String> getPromptContext(@PathVariable String sessionId,
+                                                   @RequestParam(required = true) String type) {
+        String context = "Unknown prompt context type: " + type;
+        switch (type) {
+            case "github" -> context = githubPromptSystemContext.getSystemContext();
+            case "linkedin" -> context = linkedInPromptSystemContext.getSystemContext();
+            default -> {
+                return ResponseEntity.badRequest().body(context);
+            }
+        }
+        return ResponseEntity.ok(context);
     }
 
-    @GetMapping("/chat-history/{sessionId}")
+    @GetMapping("/chat/history/{sessionId}")
     public Map<String, Object> getChatHistory(@PathVariable String sessionId) {
         List<Message> history = chatHistories.getOrDefault(sessionId, Collections.emptyList());
 
@@ -501,16 +490,9 @@ class JobQuery {
     public void setQuery(String query) { this.query = query; }
 }
 
-class PromptTemplateRequest {
-    private String sessionId;
-    private String promptTemplate;
+record PromptTemplateRequest(String sessionId, String promptTemplate) {}
 
-    public String getSessionId() { return sessionId; }
-    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
-
-    public String getPromptTemplate() { return promptTemplate; }
-    public void setPromptTemplate(String promptTemplate) { this.promptTemplate = promptTemplate; }
-}
+record PromptContext(String sessionId, String context) {}
 
 record ResumeMatchResponse(
     String sessionId,

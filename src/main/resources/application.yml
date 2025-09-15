@@ -14,6 +14,9 @@ app:
 
   ingest:
     batchSize: 50
+    # Must be smaller the maximum tokens for embedding model, larger -> irrelevant content, smaller -> more meaningful content.
+    #   Experiment with different values to find the best balance for resume matching.
+    overlapSize: 20
     chunkSize: 1000
     resume-resources: file:///Users/sjohnson/shared/data/resumes-m5
 

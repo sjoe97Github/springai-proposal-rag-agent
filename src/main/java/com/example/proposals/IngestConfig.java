@@ -1,7 +1,6 @@
 package com.example.proposals;
 
-import ingest.FileSystemIngest;
-import ingest.IngestResources;
+import ingest.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,5 +15,15 @@ public class IngestConfig {
             @Value("${app.scan.recursive:true}") boolean recursive,
             @Value("${app.scan.extensions:txt,pdf,doc,docx,md,html}") String includeExtensions) {
         return new FileSystemIngest(documentResource, recursive, includeExtensions);
+    }
+
+    @Bean("githubPromptSystemContext")
+    public ChatPromptSystemContext githubPromptSystemContext() {
+        return new GitHubLookupSystemContext();
+    }
+
+    @Bean("linkedInPromptSystemContext")
+    public ChatPromptSystemContext linkedInPromptSystemContext() {
+        return new LinkedInLookupSystemContext();
     }
 }
