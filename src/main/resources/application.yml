@@ -13,7 +13,7 @@ app:
     extensions: pdf,txt,docx
 
   ingest:
-    skipResumeIngest: false
+    skipResumeIngest: true
     batchSize: 50
     # Must be smaller the maximum tokens for embedding model, larger -> irrelevant content, smaller -> more meaningful content.
     #   Experiment with different values to find the best balance for resume matching.
@@ -51,7 +51,11 @@ spring:
     vectorstore:
       topk: 5
       pgvector:
-        remove-existing-vector-store-table: true
+        #
+        # The vector store table will be explicitly truncated if the skipResumeIngest=false; otherwise,
+        # the existing table will be reused.
+        #
+        remove-existing-vector-store-table: false
         initialize-schema: true
         dimensions: 1536
         index-type: HNSW

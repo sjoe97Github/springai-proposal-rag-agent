@@ -51,6 +51,9 @@ public class ResumeIngestRunner {
     @Qualifier("githubPromptSystemContext")
     private ChatPromptSystemContext gitHubLookupSystemContext;
 
+    @Autowired
+    private VectorStoreMaintenanceService vectorStoreMaintenanceService;
+
     private Map<String, Object> documentMetadataDecorator(Document document, String name, long size, long lastModified) {
         Map<String, Object> metadata = document.getMetadata();
 
@@ -66,6 +69,9 @@ public class ResumeIngestRunner {
                                  @Qualifier("fileSystemResumeIngest") IngestResources resourceIngest) {
         return args -> {
             if (!ingestProperties.isSkipResumeIngest()) {
+                // drop existing vectors
+                vectorStoreMaintenanceService.clearPgVectorTable();
+
                 TextSplitter splitter = TokenTextSplitter.builder().withChunkSize(ingestProperties.getChunkSize()).build();
 
                 List<Resource> fileResources = resourceIngest.getResources();

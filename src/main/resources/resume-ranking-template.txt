@@ -15,12 +15,13 @@ RESUMES:
 Use the 'ResumeSnippet' and 'InitialScore' fields to determine the best match for the user query.
 
 IMPORTANT:
-    1. DO NOT return code. DO NOT explain your process.
-    2. Set the "linkedin" field to the url following "LinkedIn URL: " if found in the resume, otherwise set it to null.
-    3. Set the "github" field to the url following "GitHub URL: " if found in the resume, otherwise set it to null.
-    4. Resume file extensions can include: .pdf, .docx, .txt.
-    5. The "candidateId" field should contain the full resume file name.
-    6. Remember, do NOT return code and DO NOT explain your process.
+    1. Resume file extensions can include: .pdf, .docx, .txt.
+    2. The "candidateId" field should contain the full resume file name.
+    3. Set the "linkedin" field to the url following "LinkedIn URL: " or any other form of a url containing linkedin.com; and
+       if no linkedin url is found, set the "linkedin" field to null.
+    4. Set the "github" field to the url following "GitHub URL: " or any other form of url containing github.com; and
+       if no github url is found, set the "github" field to null.
+    5. DO NOT return code. DO NOT explain your process.
 
-ONLY return a valid JSON array like this:
+ONLY return a valid JSON array like this, and don't include any text outside the JSON array:
 [{{"candidateId":"candidate-id", "finalScore": 85, "shortExplanation":"Reason for score", "linkedin": null, "github": null }}]
