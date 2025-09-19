@@ -21,8 +21,6 @@ app:
     chunkSize: 1000
     resume-resources: file:///Users/sjohnson/shared/data/resumes-m5
 
-#  resource: https://en.wikipedia.org/wiki/Chess
-#  resource: file:///Users/sjohnson/shared/data/proposals/seed-proposals/contract-proposal-1.pdf
 spring:
   datasource:
       password: secret
@@ -35,18 +33,32 @@ spring:
         stdio:
           servers-configuration: classpath:mcp-servers.json
 
-    openai:
-      api-key: ${OPENAI_API_KEY}
+    ollama:
+      base-url: http://localhost:11434
       chat:
         options:
-          model: gpt-4o-mini
+          #model: mervinpraison/llama3.2-3B-instruct:8b
+          #
+          # Model Card: https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct
+          # License: https://github.com/meta-llama/llama-models/blob/main/models/llama3_1/LICENSE
+          #
+          # TODO - Find another model due to following error on attempt to use github mcp server:
+          #           org.springframework.ai.retry.NonTransientAiException:
+          #           HTTP 400 - {"error":"registry.ollama.ai/linbeiJiang/Llama-3.1-8B-Instruct:latest does not support tools"}
+          #
+          model: linbeiJiang/Llama-3.1-8B-Instruct
           temperature: 0.2
-          max-tokens: 4096
 
       embedding:
         options:
-          model: text-embedding-ada-002
+          model: bge-m3
+          max-tokens: 4096
           top-k: 3
+#      embedding:
+#        options:
+#          model: nomic-embed-text
+#          max-tokens: 4096
+#          top-k: 3
 
     vectorstore:
       topk: 5
@@ -57,22 +69,10 @@ spring:
         #
         remove-existing-vector-store-table: false
         initialize-schema: true
-        dimensions: 1536
+        dimensions: 1024
         index-type: HNSW
         distance-type: COSINE_DISTANCE
 
-#      embedding:
-#        options:
-#          model: nomic-embed-text
-#          max-tokens: 4096
-#          top-k: 3
-#    ollama:
-#      base-url: http://localhost:11434
-#      chat:
-#        options:
-#          model: mervinpraison/llama3.2-3B-instruct:8b
-#          temperature: 0.2
-#
 #    vectorstore:
 #      topk: 5
 #      pgvector:
@@ -108,6 +108,7 @@ spring:
 #            include-error-loggin: true
 #            log-query-response: true
 #
+
 #management:
 #  tracing:
 #    enabled: false

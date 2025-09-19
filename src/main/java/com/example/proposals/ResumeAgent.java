@@ -1,7 +1,7 @@
 package com.example.proposals;
 
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -12,6 +12,7 @@ import java.util.List;
 
 @Component
 public class ResumeAgent {
+    Logger logger = LoggerFactory.getLogger(ResumeAgent.class);
 
 //    @Value("${spring.ai.ollama.embedding.options.top-k}")
     @Value("${spring.ai.openai.embedding.options.top-k}")
@@ -41,6 +42,11 @@ public class ResumeAgent {
                 .build();
 
         // Use the hypothetical resume prompt for the similarity search
-        return vectorStore.similaritySearch(searchRequest);
+//        return vectorStore.similaritySearch(searchRequest);
+        List<Document> results = vectorStore.similaritySearch(searchRequest);
+        for (Document doc : results) {
+            logger.info("Matched vector ID: " + doc.getId());
+        }
+        return results;
     }
 }

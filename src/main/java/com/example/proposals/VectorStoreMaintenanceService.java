@@ -18,5 +18,10 @@ public class VectorStoreMaintenanceService {
     public void clearPgVectorTable() {
         jdbcTemplate.execute("TRUNCATE TABLE " + VECTOR_TABLE + " RESTART IDENTITY CASCADE");
     }
+
+    public int countVectors() {
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + VECTOR_TABLE, Integer.class);
+        return count != null ? count : 0;
+    }
 }
 

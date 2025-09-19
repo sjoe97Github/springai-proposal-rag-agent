@@ -204,27 +204,30 @@ public class ResumeMatchController {
         // for each resume result, extract candidateId, linkedin, and github fields if present.
         for (ResumeResult rr : result.results()) {
             logger.info("CandidateID: {}, LinkedIn: {}, GitHub: {}}",
-                    rr.candidateId(),
-                    rr.linkedin() != null ? rr.linkedin().toString() : "N/A",
-                    rr.github() != null ? rr.github().toString() : "N/A");
+                    rr.getCandidateId(),
+                    rr.getLinkedin() != null ? rr.getLinkedin().toString() : "N/A",
+                    rr.getGithub() != null ? rr.getGithub().toString() : "N/A");
 
-            String repos = "No Repos";
-            if (rr.github() != null) {
+//            String repos = "No Repos";
+            List<GithubRep> repos = new ArrayList<>();
+            if (rr.getGithub() != null) {
                 repos = getRepositories(rr);
-            } else {
-                repos = getRepositories("https://github.com/ai-ml-workshops", rr.candidateId());
+                rr.setReposList(repos);
+//                repos = getRepositories("https://github.com/ai-ml-workshops", rr.getCandidateId());
             }
-            logger.debug("Repos for candidate {}: {}", rr.candidateId(), repos);
+            logger.debug("Repos for candidate {}: {}", rr.getCandidateId(), repos);
         }
+
+        String finalResult = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
+        logger.debug("Final Result: {}", finalResult);
 
         return result;
     }
 
-    private String getRepositories(ResumeResult resumeResult) {
-        return getRepositories(resumeResult.github().toString(), resumeResult.candidateId());
-    }
+    private List<GithubRep> getRepositories(ResumeResult resumeResult) {
+        String githubUrl = resumeResult.getGithub().toString();
+        String candidateId = resumeResult.getCandidateId();
 
-    private String getRepositories(String githubUrl, String candidateId) {
         String response = "No response from AI client for candidate: " + candidateId;
 
 //        String reposPromptTemplate = """
@@ -256,8 +259,23 @@ public class ResumeMatchController {
             logger.warn(response);
         }
 
+        // Using jackson to parse the JSON response into a list of GithubRep objects
+        List<GithubRep> repos = new ArrayList<>();
+        try {
+            // TODO - Crude Workaround! If the response string does not start and end with square brackets,
+            //                          add them to form a valid JSON array
+            if (!response.trim().startsWith("[")) {
+                response = "[" + response;
+            }
+            if (!response.trim().endsWith("]")) {
+                response = response + "]";
+            }
+            repos = objectMapper.readValue(response, objectMapper.getTypeFactory().constructCollectionType(List.class, GithubRep.class));
+        } catch (JsonProcessingException e) {
+            logger.warn("Failed to parse github Repos response: {}", e.getMessage());
+        }
 
-        return response;
+        return repos;
     }
 
     @PostMapping("/context/set/{sessionId}")
@@ -500,10 +518,10 @@ record ResumeMatchResponse(
     List<ResumeResult> results
 ) {}
 
-record ResumeResult(
-        String candidateId,
-        int finalScore,
-        String shortExplanation,
-        URL linkedin,
-        URL github
-) {}
+//record ResumeResult(
+//        String candidateId,
+//        int finalScore,
+//        String shortExplanation,
+//        URL linkedin,
+//        URL github
+//) {}

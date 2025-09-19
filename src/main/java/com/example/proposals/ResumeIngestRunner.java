@@ -69,8 +69,15 @@ public class ResumeIngestRunner {
                                  @Qualifier("fileSystemResumeIngest") IngestResources resourceIngest) {
         return args -> {
             if (!ingestProperties.isSkipResumeIngest()) {
-                // drop existing vectors
-                vectorStoreMaintenanceService.clearPgVectorTable();
+                // drop existing vectors, if there are any ...
+                // TODO - Improve the configuration and startup control because during testing/development there might be
+                //        cases where the clearPgVectorTable() method was successfully called, but a subsequent ingest
+                //        failure resulted in an empty vector store.  Therefore, the next startup would result in an
+                //        error related to trying to truncate an already empty table.
+                //
+                if (vectorStoreMaintenanceService.countVectors() > 0) {
+                    vectorStoreMaintenanceService.clearPgVectorTable();
+                }
 
                 TextSplitter splitter = TokenTextSplitter.builder().withChunkSize(ingestProperties.getChunkSize()).build();
 
@@ -94,13 +101,13 @@ public class ResumeIngestRunner {
                     //        known way to define a foreign key relationship between this table and the underlying
                     //        vector store table; therefore there is no way to enforce referential integrity.
                     //
-                    docs.forEach(d -> {
-                        try {
-                            documentMetadataDecorator(d, res.getFilename(), res.contentLength(), res.lastModified());
-                        } catch (IOException e) {
-                            logger.info("Unable to get file resource metadata while ingesting document: " + d.getMetadata().get("source"));
-                        }
-                    });
+//                    docs.forEach(d -> {
+//                        try {
+//                            documentMetadataDecorator(d, res.getFilename(), res.contentLength(), res.lastModified());
+//                        } catch (IOException e) {
+//                            logger.info("Unable to get file resource metadata while ingesting document: " + d.getMetadata().get("source"));
+//                        }
+//                    });
 
                     // splitter.apply(docs) takes the list of Document objects and splits their text content into
                     // smaller chunks, according to the chunkSize specified when building the TokenTextSplitter.
