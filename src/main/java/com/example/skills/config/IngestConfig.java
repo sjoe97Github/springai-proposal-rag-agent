@@ -1,6 +1,5 @@
-package com.example.proposals;
+package com.example.skills.config;
 
-import com.example.proposals.config.IngestProperties;
 import ingest.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;

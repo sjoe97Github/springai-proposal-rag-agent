@@ -1,8 +1,8 @@
-package com.example.proposals;
+package com.example.skills;
 
-import java.io.IOException;
 import java.util.*;
 
+import com.example.skills.vector.VectorStoreMaintenanceService;
 import com.sun.istack.logging.Logger;
 import ingest.ChatPromptSystemContext;
 import ingest.IngestResources;
@@ -28,7 +28,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.Resource;
 
-import com.example.proposals.config.IngestProperties;
+import com.example.skills.config.IngestProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties(IngestProperties.class)
@@ -54,12 +54,11 @@ public class ResumeIngestRunner {
     @Autowired
     private VectorStoreMaintenanceService vectorStoreMaintenanceService;
 
-    private Map<String, Object> documentMetadataDecorator(Document document, String name, long size, long lastModified) {
+    private Map<String, Object> documentMetadataDecorator(Document document, String groupId, String qualifiedFileName) {
         Map<String, Object> metadata = document.getMetadata();
 
-        metadata.put("filename", name);
-        metadata.put("size", size);
-        metadata.put("lastModified", lastModified);
+        metadata.put("file", qualifiedFileName);
+        metadata.put("groupId", groupId);
 
         return metadata;
     }
@@ -69,12 +68,6 @@ public class ResumeIngestRunner {
                                  @Qualifier("fileSystemResumeIngest") IngestResources resourceIngest) {
         return args -> {
             if (!ingestProperties.isSkipResumeIngest()) {
-                // drop existing vectors, if there are any ...
-                // TODO - Improve the configuration and startup control because during testing/development there might be
-                //        cases where the clearPgVectorTable() method was successfully called, but a subsequent ingest
-                //        failure resulted in an empty vector store.  Therefore, the next startup would result in an
-                //        error related to trying to truncate an already empty table.
-                //
                 if (vectorStoreMaintenanceService.countVectors() > 0) {
                     vectorStoreMaintenanceService.clearPgVectorTable();
                 }
@@ -86,28 +79,14 @@ public class ResumeIngestRunner {
                 // Read → split → index in batches
                 List<Document> buffer = new ArrayList<>(ingestProperties.getBatchSize());
                 for (Resource res : fileResources) {
+                    // Generate a unique groupId for all documents containing chunks of this current resource
+                    String groupId = UUID.randomUUID().toString();
+                    String fullyQualifiedFileName = res.getFile().getAbsolutePath();
+
                     // TikaDocumentReader(res).get() reads the file resource res and returns a List<Document>,
                     // where each Document represents the content extracted from the file which is often a single document
                     // per file, but there could be more than one document depending on the file type.
                     List<Document> docs = new TikaDocumentReader(res).get();
-
-                    //
-                    // TODO - Is this overkill?  The point it to use the filename, size, and lastModified to check
-                    //        whether or not the file is already in the vector store.  However, there is currently
-                    //        no mechanism to lookup the vector by filename or metadata.   It would be possible to
-                    //        simply maintain a simple lookup table representing the "memory" of what has been ingested;
-                    //        and this table might use a sequence for the id and support a composite
-                    //        key of filename+size+lastModified.   This downside of this approach is there is no
-                    //        known way to define a foreign key relationship between this table and the underlying
-                    //        vector store table; therefore there is no way to enforce referential integrity.
-                    //
-//                    docs.forEach(d -> {
-//                        try {
-//                            documentMetadataDecorator(d, res.getFilename(), res.contentLength(), res.lastModified());
-//                        } catch (IOException e) {
-//                            logger.info("Unable to get file resource metadata while ingesting document: " + d.getMetadata().get("source"));
-//                        }
-//                    });
 
                     // splitter.apply(docs) takes the list of Document objects and splits their text content into
                     // smaller chunks, according to the chunkSize specified when building the TokenTextSplitter.
@@ -119,6 +98,9 @@ public class ResumeIngestRunner {
                     List<Document> overlappingSplits = ResourceChunker.overlappingChunk(splitDocs, ingestProperties.getChunkSize(), ingestProperties.getOverlapSize());
 
                     for (Document d : overlappingSplits) {
+                        // Decorate Document metadata with groupId and fully qualified resource (file) name
+                        documentMetadataDecorator(d, groupId, fullyQualifiedFileName);
+
                         buffer.add(d);
                         if (buffer.size() >= ingestProperties.getBatchSize()) {
                             vectorStore.accept(buffer);

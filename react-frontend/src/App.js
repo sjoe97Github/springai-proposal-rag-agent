@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-const API_BASE_URL = 'http://localhost:3001/resume-match';
+const API_BASE_URL = 'http://localhost:8080/resume-match';
 
 // Generate a random sessionId
 const generateSessionId = () => {

@@ -1,10 +1,9 @@
-package com.example.proposals;
+package com.example.skills;
 
+import com.example.skills.datatypes.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ingest.ChatPromptSystemContext;
-import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.spec.McpSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -16,11 +15,7 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.mcp.SyncMcpToolCallback;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
-import org.springframework.ai.tool.definition.ToolDefinition;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,10 +26,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/resume-match")
@@ -43,16 +36,11 @@ public class ResumeMatchController {
     // Add Class level logger
     Logger logger = LoggerFactory.getLogger(ResumeMatchController.class);
 
-//    @Value("${spring.ai.ollama.embedding.options.top-k}")
-    @Value("${spring.ai.openai.embedding.options.top-k}")
-    private int topK;
-
     @Value("classpath:/resume-ranking-template.txt")
     private Resource defaultPromptTemplate;
 
     @Value("classpath:/mcp-repos-system-context.txt")
     private Resource mcpReposSystemContext;
-
 
     @Autowired
     @Qualifier("githubPromptSystemContext")
@@ -66,8 +54,9 @@ public class ResumeMatchController {
 
     private final ChatClient aiClient;
     private final ChatClient githubMcpServerChatClient;
-    private final VectorStore vectorStore;
 //    private final ToolCallbackProvider toolCallbackProvider;
+
+    private final ApplicationContext applicationContext;
 
     // Chat history by sessionId
     private final Map<String, List<Message>> chatHistories = new ConcurrentHashMap<>();
@@ -77,24 +66,12 @@ public class ResumeMatchController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final ApplicationContext applicationContext;
-
-//    public ResumeMatchController(ChatClient.Builder chatClientBuilder, VectorStore vectorStore, ResumeAgent resumeAgent, ApplicationContext applicationContext) {
-//        this.resumeAgent = resumeAgent;
-//        this.vectorStore = vectorStore;
-//        this.applicationContext = applicationContext;
-//
-//        // Create ChatClient with MCP tools
-//        this.aiClient = createChatClientWithMcpTools(chatClientBuilder);
-//    }
     public ResumeMatchController(ChatClient.Builder chatClientBuilder,
                                  ChatClient githubMcpServerChatClient,
                                  ToolCallbackProvider tools,
-                                 VectorStore vectorStore,
                                  ResumeAgent resumeAgent,
                                  ApplicationContext applicationContext, ChatPromptSystemContext githubPromptSystemContext) {
         this.resumeAgent = resumeAgent;
-        this.vectorStore = vectorStore;
         this.applicationContext = applicationContext;
 
         // Create ChatClient with MCP tools
@@ -108,7 +85,7 @@ public class ResumeMatchController {
     }
 
     @PostMapping("/query")
-    public ResumeMatchResponse matchResumes(@RequestBody JobQuery query,
+    public ResumeMatchResponse matchResumes(@RequestBody ResumeMatchQuery query,
                                             @RequestParam(required = false) String sessionId) throws JsonProcessingException {
         // Create session ID if not provided
         if (sessionId == null || sessionId.isEmpty()) {
@@ -127,10 +104,9 @@ public class ResumeMatchController {
         // TODO - Null check similarResumes?
         similarResumes = deduplicateResumes(similarResumes);
 
-        // Format resumes for prompt context
         String resumeContext = formatResumesForPrompt(similarResumes);
 
-        // Get prompt template (custom or default)
+        // Get prompt template
         String promptText = getPromptTemplate(sessionId);
 
         // Create prompt with parameters
@@ -145,27 +121,6 @@ public class ResumeMatchController {
 
         ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
 
-//        String experimentalPromptText = """
-//            In the curl statement, `curl -s https://api.github.com/users/user_segment/repos`, replace the `user-segment` portion of the url with
-//            everything after the last `/` character in https://github.com/sjoe97Github
-//            Execute the curl command to get a list of public repositories
-//            Keep only the .html_url parts of the response.
-//        """;
-
-//        String experimentalPromptText = """
-//            Use the tool named `list_repos` to return all of the repositories for https://github.com/sjoe97Github
-//            Parameters: per_page=10, visibility=all, sort=updated
-//            Show the tool request and response.
-//            Do not fabricate the response.
-//        """;
-//        String experimentalPromptText = """
-//                Get repositories for the owner of https://github.com/sjoe97Github.
-//                Execute the tool and return the actual response data, not made up response.
-//            """;
-//        ChatResponse chatResponse = aiClient.prompt(PromptTemplate.builder().template(experimentalPromptText).build()
-//                    .create()).toolNames("list_repos").call().chatResponse();
-//
-        // Get AI response
         String response = chatResponse.getResult().getOutput().getText();
 
         logger.info("AI Response: {}", response);
@@ -176,7 +131,7 @@ public class ResumeMatchController {
         // Parse AI response using Jackson to ensure valid JSON
         // TODO - Re-evaluate the Jackson parsing approach given that the result being parsed is returned by the LLM
         //        and therefore has a non-deterministic shape (may not be valid JSON). Consider using a more flexible
-        //        method to extract structured data from whatever shape string is returned in the chat response.
+        //        method to extract structured data from whatever shape is returned in the chat response.
         ResumeResult[] resumeResults = new ResumeResult[0];
         try {
             // TODO - Crude Workaround! If the response string does not start and end with square brackets,
@@ -189,7 +144,6 @@ public class ResumeMatchController {
             }
             resumeResults = objectMapper.readValue(response, ResumeResult[].class);
         } catch (JsonProcessingException e) {
-            // TODO - Use a logging framework
             logger.warn("Failed to parse AI response: {}", e.getMessage());
         }
 
@@ -201,19 +155,11 @@ public class ResumeMatchController {
         );
         logger.info("result: {}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
 
-        // for each resume result, extract candidateId, linkedin, and github fields if present.
         for (ResumeResult rr : result.results()) {
-            logger.info("CandidateID: {}, LinkedIn: {}, GitHub: {}}",
-                    rr.getCandidateId(),
-                    rr.getLinkedin() != null ? rr.getLinkedin().toString() : "N/A",
-                    rr.getGithub() != null ? rr.getGithub().toString() : "N/A");
-
-//            String repos = "No Repos";
             List<GithubRep> repos = new ArrayList<>();
             if (rr.getGithub() != null) {
                 repos = getRepositories(rr);
                 rr.setReposList(repos);
-//                repos = getRepositories("https://github.com/ai-ml-workshops", rr.getCandidateId());
             }
             logger.debug("Repos for candidate {}: {}", rr.getCandidateId(), repos);
         }
@@ -238,11 +184,9 @@ public class ResumeMatchController {
             list repositories for the GitHub url: %s
         """;
 
-        String reposPrompt = String.format(reposPromptTemplate, githubUrl);
-
-        //String promptText = getMcpReposSystemContext();
-        //logger.debug("GitHub MCP Client System context: {}", promptText);
         logger.info("GitHub MCP Client System context: {}", gitHubLookupSystemContext.getSystemContext());
+
+        String reposPrompt = String.format(reposPromptTemplate, githubUrl);
 
         ChatResponse reposChatResponse = githubMcpServerChatClient.prompt(PromptTemplate.builder()
                 .template(reposPrompt).build().create())
@@ -250,7 +194,7 @@ public class ResumeMatchController {
                 .call().chatResponse();
 
         if (reposChatResponse != null) {
-            // Guard against null result
+            // TODO - Guard against null result?
             Generation generatedResponse = reposChatResponse.getResult();
             response = generatedResponse.getOutput().getText();
 
@@ -371,157 +315,5 @@ public class ResumeMatchController {
         }
         return uniqueResumes;
     }
-
-    private ChatClient createChatClientWithMcpTools(ChatClient.Builder chatClientBuilder) {
-        try {
-            // Get the MCP sync clients
-            Object mcpSyncClients = applicationContext.getBean("mcpSyncClients");
-
-            if (mcpSyncClients instanceof List) {
-                List<?> clientsList = (List<?>) mcpSyncClients;
-                List<ToolCallback> allToolCallbacks = new ArrayList<>();
-
-                for (Object client : clientsList) {
-                    if (client instanceof McpSyncClient) {
-                        McpSyncClient syncClient = (McpSyncClient) client;
-
-                        // Get all tools from this MCP client
-                        var toolsResponse = syncClient.listTools();
-
-                        // Create SyncMcpToolCallback for each tool
-                        for (var tool : toolsResponse.tools()) {
-                            SyncMcpToolCallback toolCallback = new SyncMcpToolCallback(syncClient, tool);
-                            allToolCallbacks.add(toolCallback);
-                            System.out.println("Registered MCP tool: " + tool.name());
-                        }
-                    }
-                }
-
-                // Check all MCP-related beans
-                String[] allBeans = applicationContext.getBeanDefinitionNames();
-                System.out.println("\nAll registered beans containing 'mcp' or 'tool':");
-                Arrays.stream(allBeans)
-                        .filter(name -> name.toLowerCase().contains("mcp") ||
-                                name.toLowerCase().contains("tool"))
-                        .forEach(beanName -> {
-                            Object bean = applicationContext.getBean(beanName);
-                            System.out.println(" - " + beanName + ": " + bean.getClass().getName());
-                        });
-                if (!allToolCallbacks.isEmpty()) {
-                    System.out.println("Creating ChatClient with " + allToolCallbacks.size() + " MCP tools");
-                    return chatClientBuilder
-                            .defaultToolCallbacks(allToolCallbacks.toArray(new ToolCallback[0]))
-                            .build();
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Error setting up MCP tools: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        // Fallback to regular ChatClient without tools
-        System.out.println("Creating ChatClient without MCP tools");
-        return chatClientBuilder.build();
-    }
-
-    //@PostConstruct
-    public void checkTools() {
-        // Check if MCP client beans exist
-        System.out.println("=== MCP Debug Information ===");
-
-        Object mcpSyncClients = applicationContext.getBean("mcpSyncClients");
-        System.out.println("Found mcpSyncClients bean: " + mcpSyncClients.getClass().getName());
-
-        if (mcpSyncClients instanceof List) {
-            List<?> clientsList = (List<?>) mcpSyncClients;
-            System.out.println("MCP clients found: " + clientsList.size());
-
-            for (int i = 0; i < clientsList.size(); i++) {
-                Object client = clientsList.get(i);
-                System.out.println("MCP Client[" + i + "]: " + client.getClass().getName());
-
-                // Check if it's a SyncMcpClient or has access to tools
-                if (client instanceof McpSyncClient) {
-                    McpSyncClient syncClient = (McpSyncClient) client;
-                    syncClient.listTools().tools().forEach(tool -> {
-                        System.out.printf("  - Tool: %s, Description: %s%n", tool.name(), tool.description());
-                        try {
-                            McpSchema.JsonSchema schema = tool.inputSchema();
-                            System.out.println("    Input Schema: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema));
-                        } catch (JsonProcessingException e) {
-                            System.err.println("    Failed to parse input schema for tool " + tool.name() + ": " + e.getMessage());
-                        }
-                    });
-                }
-            }
-        }
-
-        try {
-            ToolCallbackProvider toolProvider = applicationContext.getBean(ToolCallbackProvider.class);
-            System.out.println("Found ToolCallbackProvider: " + toolProvider.getClass().getName());
-
-            ToolCallback[] callbacks = toolProvider.getToolCallbacks();
-            System.out.println("Available tools: " + callbacks.length);
-
-            for (ToolCallback callback : callbacks) {
-                ToolDefinition def = callback.getToolDefinition();
-                System.out.println("  - Tool: " + def.name() + " | " + def.description());
-            }
-
-        } catch (Exception e) {
-            System.out.println("No ToolCallbackProvider found: " + e.getMessage());
-        }
-
-        // Check all beans
-        String[] allBeans = applicationContext.getBeanNamesForType(Object.class);
-        System.out.println("Total beans: " + allBeans.length);
-
-        // Filter for MCP-related beans
-        List<String> mcpBeans = Arrays.stream(allBeans)
-                .filter(name -> name.toLowerCase().contains("mcp") ||
-                        name.toLowerCase().contains("tool") ||
-                        name.toLowerCase().contains("stdio") ||
-                        name.toLowerCase().contains("client"))
-                .collect(Collectors.toList());
-
-        System.out.println("MCP/Tool-related beans found: " + mcpBeans.size());
-        mcpBeans.forEach(System.out::println);
-
-        // Check ChatClient details
-        System.out.println("ChatClient class: " + aiClient.getClass().getName());
-
-        // Check if MCP client beans are actually created
-        try {
-            Object mcpClient = applicationContext.getBean("spring.ai.mcp.client.stdio.connections.local-mcp-service");
-            System.out.println("MCP client bean found: " + mcpClient.getClass().getName());
-        } catch (Exception e) {
-            System.err.println("Error checking MCP setup: " + e.getMessage());
-        }
-    }
 }
 
-// Required data classes
-class JobQuery {
-    private String query;
-
-    public String getQuery() { return query; }
-    public void setQuery(String query) { this.query = query; }
-}
-
-record PromptTemplateRequest(String sessionId, String promptTemplate) {}
-
-record PromptContext(String sessionId, String context) {}
-
-record ResumeMatchResponse(
-    String sessionId,
-    String query,
-    List<ResumeResult> results
-) {}
-
-//record ResumeResult(
-//        String candidateId,
-//        int finalScore,
-//        String shortExplanation,
-//        URL linkedin,
-//        URL github
-//) {}

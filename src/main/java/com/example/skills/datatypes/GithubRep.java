@@ -1,4 +1,4 @@
-package com.example.proposals;
+package com.example.skills.datatypes;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

@@ -1,4 +1,4 @@
-package com.example.proposals.config;
+package com.example.skills.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

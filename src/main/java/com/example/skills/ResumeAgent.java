@@ -1,4 +1,4 @@
-package com.example.proposals;
+package com.example.skills;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,8 +14,7 @@ import java.util.List;
 public class ResumeAgent {
     Logger logger = LoggerFactory.getLogger(ResumeAgent.class);
 
-//    @Value("${spring.ai.ollama.embedding.options.top-k}")
-    @Value("${spring.ai.openai.embedding.options.top-k}")
+    @Value("${app.match.top-k}")
     private int topK;
 
     private final VectorStore vectorStore;

@@ -1,6 +1,5 @@
-package com.example.proposals;
+package com.example.skills.datatypes;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.net.URL;
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package com.example.proposals;
+package com.example.skills;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.UserMessage;

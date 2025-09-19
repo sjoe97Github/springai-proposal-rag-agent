@@ -12,6 +12,9 @@ app:
     recursive: true
     extensions: pdf,txt,docx
 
+  match:
+    top-k: 5
+
   ingest:
     skipResumeIngest: true
     batchSize: 50
@@ -49,7 +52,6 @@ spring:
           top-k: 3
 
     vectorstore:
-      topk: 5
       pgvector:
         #
         # The vector store table will be explicitly truncated if the skipResumeIngest=false; otherwise,
