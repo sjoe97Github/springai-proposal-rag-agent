@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 
-const API_BASE_URL = 'http://localhost:8080/resume-match';
+const API_BASE_URL = 'http://localhost:3001/resume-match';
+
+// Generate a random sessionId
+const generateSessionId = () => {
+    return 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+};
 
 function App() {
     const [sessionId, setSessionId] = useState('');
+
+    // Generate sessionId on component mount
+    useEffect(() => {
+        setSessionId(generateSessionId());
+    }, []);
     const [loading, setLoading] = useState({});
 
     // State for Match Resumes
@@ -33,8 +43,6 @@ function App() {
             return;
         }
 
-        var requestBody = { query: query };
-
         setLoadingState('matchResumes', true);
         try {
             const url = sessionId
@@ -58,11 +66,6 @@ function App() {
     };
 
     const handleGetPromptContext = async () => {
-        if (!sessionId.trim()) {
-            alert('Please enter a session ID');
-            return;
-        }
-
         setLoadingState('getContext', true);
         try {
             const response = await fetch(
@@ -83,10 +86,6 @@ function App() {
     };
 
     const handleSetPromptContext = async () => {
-        if (!sessionId.trim()) {
-            alert('Please enter a session ID');
-            return;
-        }
         if (!contextToSet.trim()) {
             alert('Please enter context to set');
             return;
@@ -121,11 +120,6 @@ function App() {
     };
 
     const handleGetChatHistory = async () => {
-        if (!sessionId.trim()) {
-            alert('Please enter a session ID');
-            return;
-        }
-
         setLoadingState('chatHistory', true);
         try {
             const response = await fetch(
@@ -143,22 +137,7 @@ function App() {
     return (
         <div className="app">
             <h1>Resume Match Controller</h1>
-
-            {/* Session ID Input */}
-            <div className="section">
-                <h2>Session Configuration</h2>
-                <div className="form-group">
-                    <label htmlFor="sessionId">Session ID:</label>
-                    <input
-                        id="sessionId"
-                        type="text"
-                        value={sessionId}
-                        onChange={(e) => setSessionId(e.target.value)}
-                        placeholder="Enter session ID (optional for match resumes)"
-                        className="input-field"
-                    />
-                </div>
-            </div>
+            <p className="session-info">Session ID: {sessionId}</p>
 
             {/* Match Resumes Section */}
             <div className="section">
