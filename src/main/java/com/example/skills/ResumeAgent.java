@@ -6,23 +6,36 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Component
 public class ResumeAgent {
     Logger logger = LoggerFactory.getLogger(ResumeAgent.class);
 
-    @Value("${app.match.top-k}")
-    private int topK;
+    @Value("${app.match.top-k-similarity}")
+    private int similaritySearchTopK;
+
+    @Value("${app.match.top-k-aggregate}")
+    private int aggregateGroupsTopK;
+
+    @Value("${app.match.softmax-temperature}")
+    private double softmaxTemperature;
+
+    @Value("${app.match.top-k-documents}")
+    private long rerankedDocumentsTopK;
 
     private final VectorStore vectorStore;
     private final HypotheticalSearchStrategy hypotheticalSearchStrategy;
+    private final JdbcTemplate jdbcTemplate;
 
-    public ResumeAgent(VectorStore vectorStore, HypotheticalSearchStrategy hypotheticalSearchStrategy) {
+    public ResumeAgent(VectorStore vectorStore, HypotheticalSearchStrategy hypotheticalSearchStrategy, JdbcTemplate jdbcTemplate) {
         this.vectorStore = vectorStore;
         this.hypotheticalSearchStrategy = hypotheticalSearchStrategy;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     public List<Document> relevantResumes(String userPrompt) {
@@ -36,16 +49,187 @@ public class ResumeAgent {
 
         // Search for similar resumes
         SearchRequest searchRequest = SearchRequest.builder()
-                .topK(topK) // Increase top_k for better recall
+                .topK(similaritySearchTopK) // Increase top_k for better recall
                 .query(resumePrompt)
                 .build();
 
         // Use the hypothetical resume prompt for the similarity search
-//        return vectorStore.similaritySearch(searchRequest);
         List<Document> results = vectorStore.similaritySearch(searchRequest);
         for (Document doc : results) {
-            logger.info("Matched vector ID: " + doc.getId());
+            logger.info("Pre-refined similarity matched vector ID: " + doc.getId());
         }
+
+        //
+        // ============================================================================================
+        //
+        // Note regarding similaritySearch results:
+        //
+        // The results returned by similaritySearch are only chunks of a resume and therefore not sufficiently
+        // representative of an entire resume.
+        //
+        // Each chunk has metadata including "groupId" (same for all chunks of the same resume)
+        // and "chunkIndex" (the position of the chunk within the resume).  This metadata can be used to associate
+        // chunks with other chunks of their parent resume, and to order chunks within the resume.
+        //
+        // ============================================================================================
+        //
+
+        /* Rerank similarity search chunks using softmax-weighted score.
+            Organize chunks by groupId and re-score the groups of chunks as an aggregated whole, effectively scoring
+            each group of related chunks.  Where related chunks are parts of the same resume.
+            Map<String, Double> rerankedGroups = groupAndScore(results);
+        */
+        Map<String, Double> rerankedGroups = groupAndScore(results);
+
+        // Pick the top groupIds from reranked groups.
+        List<String> topGroupIds = topGroupIds(rerankedGroups);
+
+        /*
+            Gather all chunks for each top groupId and re-score score the entire group which effectively
+            scores resumes instead of a subset of resume chunks.
+         */
+        Map<String, Double> groupScores = gatherGroupChunksAndScoreGroups(topGroupIds, resumePrompt);
+
+        // Final doc ranking
+        List<String> orderedGroupIds = topGroupIds.stream()
+            .sorted((grpId_a,grpId_b) -> Double.compare(groupScores.get(grpId_b), groupScores.get(grpId_a)))
+            .toList();
+
+        /*
+            For each top groupId, aggregate (assemble) all chunks in the group, essentially reconstructing the resume
+            represented by the groupId.
+
+            Other possible aggregation strategies:
+             - Just return the single best chunk for each groupId
+             - Return the top N chunks for each groupId
+             - Return chunks until a certain token limit is reached
+             - Return a "window" of chunks around the best scoring chunk
+             - Return a collection of the highest scoring chunks that cover different sections of the resume
+             - Use a clustering algorithm to identify and select representative chunks from the group
+             - Use Maximal Marginal Relevance (MMR) to select diverse and relevant chunks
+             - Use a graph-based approach to identify and select the most central chunks in the group
+             - Use a machine learning model to predict the relevance of each chunk and select the top ones
+
+            Ultimately LLM can be used to summarize or extract key points from all chunks in the group
+        */
+        return gatherGroupChunksTogether(orderedGroupIds, resumePrompt, groupScores);
+    }
+
+    private List<String> topGroupIds(Map<String, Double> rerankedGroups) {
+        return rerankedGroups.entrySet().stream()
+                .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+                .limit(rerankedDocumentsTopK)
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    private Map<String, Double> gatherGroupChunksAndScoreGroups(List<String> topGroupIds, String userPrompt) {
+        Map<String, Double> groupScores = new HashMap<>();
+        for (String gid : topGroupIds) {
+            List<Document> allGroupDocs = vectorStore.similaritySearch(
+                    SearchRequest.builder()
+                            .query(userPrompt)
+                            .topK(aggregateGroupsTopK) // presumably large enough to cover whole doc
+                            .filterExpression("groupId == '" + gid + "'")
+                            .build()
+            );
+
+            groupScores.put(gid, aggregatedSoftMaxScore(allGroupDocs));
+        }
+        return groupScores;
+    }
+
+    private Map<String, Double> groupAndScore(List<Document> docs) {
+        Map<String, Double> scoresByGroupId = new HashMap<>();
+
+        Map<String, List<Document>> documentsByGroupId = docs.stream()
+                .filter(d -> d.getMetadata().get("groupId") != null)
+                .collect(Collectors.groupingBy(d -> (String) d.getMetadata().get("groupId")));
+
+        for (var e : documentsByGroupId.entrySet()) {
+            scoresByGroupId.put(e.getKey(), aggregatedSoftMaxScore(e.getValue()));
+        }
+
+        return scoresByGroupId;
+    }
+
+    private double aggregatedSoftMaxScore(List<Document> docs) {
+        double score = 0.0;
+
+        // Note regarding softmax temperature:
+        //
+        // 0.05–0.2 works well ...
+        // Higher the score result in a flatter or more even distribution.
+        // Lower scores result in a distribution of varying peaks, the higher the peak the heavier the weight.
+        // (see https://en.wikipedia.org/wiki/Softmax_function#Temperature)
+
+        double[] documentScores = docs.stream().mapToDouble(Document::getScore).toArray();
+        double maxDocumentScore = Arrays.stream(documentScores).max().orElse(0);
+        double denominator = Arrays.stream(documentScores)
+                .map(v -> Math.exp((v - maxDocumentScore)/softmaxTemperature))
+                .sum();
+
+        score = Arrays.stream(documentScores)
+                .map(v -> (Math.exp((v - maxDocumentScore) / softmaxTemperature) / denominator) * v)
+                .sum();
+
+        return score;
+    }
+
+    List<Document> fetchAllGroupChunks(String groupId, String userPrompt) {
+        int maxChunksPerGroup = 20;  // TODO - Why 20? Make configurable?
+        SearchRequest sr = SearchRequest.builder()
+                // query can be empty-ish; we’re filtering by groupId and not relying on similarity here
+                .query(userPrompt)
+                .topK(maxChunksPerGroup)
+//                .filterExpression("metadata->>'groupId' == '" + groupId + "'")
+                .filterExpression("groupId == '" + groupId + "'")
+                .build();
+
+        return vectorStore.similaritySearch(sr);
+    }
+
+    public List<Document> gatherGroupChunksTogether(List<String> topGroupIds, String userPrompt, Map<String, Double> groupScores) {
+        List<Document> results = new ArrayList<>();
+
+        for (String gid : topGroupIds) {
+            List<Document> allChunks = fetchAllGroupChunks(gid, userPrompt);
+
+            // "stitch" the chunks together to form a single text blob,
+            // TODO - Attempt to center around on the best scoring chunk?
+            String stitched = allChunks.stream()
+                    .sorted(Comparator.comparingInt(sd -> ((Number)
+                            sd.getMetadata().getOrDefault("chunkIndex", 0)).intValue()))
+                    .map(Document::getText)
+                    .collect(Collectors.joining("\n---\n"));
+
+            // There must be at least one Document (chunk) for the groupId from which to get the filename.
+            Map<String, Object> metadata = allChunks.getFirst().getMetadata();
+            metadata.put("score", groupScores.getOrDefault(gid, 0.0d));
+            results.add(new Document(stitched, metadata));
+        }
+
         return results;
+    }
+
+    record ScoredDoc(Document d, double score) {}
+
+    private static double documentScore(Document d) {
+        double score = 0.0;  // Fallback: neutral score if backend didn't return a distance
+
+        // A future version of Spring AI may provide to the score in document metadata
+        Object dist = d.getMetadata().getOrDefault("distance",
+                        d.getMetadata().getOrDefault("dist",
+                        d.getMetadata().getOrDefault("score", null)));
+
+        if (dist instanceof Number n) {
+            double distance = n.doubleValue();
+            // COSINE_DISTANCE configured -> similarity = 1 - distance
+            score = 1.0 - distance;
+        } else if (d.getScore() != null) {
+            score = 1.0 - d.getScore();
+        }
+
+        return score;
     }
 }

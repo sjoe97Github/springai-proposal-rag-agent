@@ -288,10 +288,10 @@ public class ResumeMatchController {
             Document doc = resumes.get(i);
             Map<String, Object> metadata = doc.getMetadata();
 
-            sb.append("CandidateID: ").append(metadata.getOrDefault("source", "unknown-" + i)).append("\n");
-            sb.append("InitialScore: ").append(String.format("%.4f", doc.getScore())).append("\n");
-            sb.append("Path: ").append(metadata.getOrDefault("path", "unknown")).append("\n");
-            sb.append("ResumeSnippet:\n").append(truncateText(doc.getText(), 2400)).append("\n---\n");
+            sb.append("CandidateID: ").append(metadata.getOrDefault("file", "unknown-" + i)).append("\n");
+            sb.append("InitialScore: ").append(metadata.getOrDefault("score", 0.0d)).append("\n");
+            sb.append("Path: ").append(metadata.getOrDefault("file", "unknown")).append("\n");
+            sb.append("ResumeSnippet:\n").append(truncateText(doc.getText(), 2500)).append("\n\n");
         }
         return sb.toString();
     }

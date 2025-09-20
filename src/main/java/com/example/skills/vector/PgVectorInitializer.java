@@ -60,9 +60,10 @@ public class PgVectorInitializer implements VectorInitializer {
                 //        directly into the ResourceChunker call.
                 List<Document> overlappingSplits = ResourceChunker.overlappingChunk(splitDocs, ingestProperties.getChunkSize(), ingestProperties.getOverlapSize());
 
-                for (Document d : overlappingSplits) {
-                    // Decorate Document metadata with groupId and fully qualified resource (file) name
-                    documentMetadataDecorator(d, groupId, fullyQualifiedFileName);
+                for (int i = 0; i < overlappingSplits.size(); i++) {
+                    Document d = overlappingSplits.get(i);
+                    // Add index, groupId, and fully qualified filename to document metadata
+                    documentMetadataDecorator(d, i, groupId, fullyQualifiedFileName);
 
                     buffer.add(d);
                     if (buffer.size() >= ingestProperties.getBatchSize()) {
@@ -77,11 +78,12 @@ public class PgVectorInitializer implements VectorInitializer {
         }
     }
 
-    private Map<String, Object> documentMetadataDecorator(Document document, String groupId, String qualifiedFileName) {
+    private Map<String, Object> documentMetadataDecorator(Document document, int chunkIndex, String groupId, String qualifiedFileName) {
         Map<String, Object> metadata = document.getMetadata();
 
         metadata.put("file", qualifiedFileName);
         metadata.put("groupId", groupId);
+        metadata.put("chunkIndex", chunkIndex);
 
         return metadata;
     }

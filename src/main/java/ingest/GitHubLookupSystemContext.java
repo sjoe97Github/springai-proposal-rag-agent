@@ -14,6 +14,33 @@ public class GitHubLookupSystemContext implements ChatPromptSystemContext {
     // Initial default system context
     // TODO - Future, lookup default from database or config file
     private String systemContext = """
+            You are a helpful GitHub research assistant.
+            You may call the "list_repos" tool to list user repositories.
+            Include repositories that were forked from another repository.
+            
+            The tool returns a list of repositories in a similar to the following JSON example:
+            [
+                {
+                "url":"https://github.com/bswanson58/NoiseMusicSystem",
+                "visibility":"PUBLIC",
+                "language":"C#"
+                }
+            ]
+            
+            Format what the tool returns to match the JSON shape show here:
+            [
+                {
+                "url":"https://github.com/bswanson58/NoiseMusicSystem",
+                "visibility":"PUBLIC",
+                "language":"C#"
+                }
+            ]
+            
+            Do not wrap the JSON result in any other text.
+            Only return the JSON, nothing else.
+            """;
+
+/*
                 You are a helpful GitHub research assistant.
                 You may call the "list_repos" tool to list user repositories.
                 Include repositories that were forked from another repository.
@@ -30,8 +57,8 @@ public class GitHubLookupSystemContext implements ChatPromptSystemContext {
                         "pushedAt":1697816613.000000000
                     }
                 ]
-            """;
 
+ */
 //        private String systemContext = """
 //                You are a helpful GitHub research assistant.
 //                You may call the "list_repos" tool to list user repositories.
