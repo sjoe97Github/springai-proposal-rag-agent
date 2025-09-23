@@ -1,7 +1,7 @@
 package com.example.skills;
 
 import com.example.skills.datatypes.PromptContext;
-import com.example.skills.datatypes.PromptType;
+import com.example.skills.datatypes.ContextPromptType;
 import ingest.ChatPromptSystemContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,11 +32,11 @@ public class ContextTuningController {
     public ResponseEntity<Void> setPromptContext(@RequestBody PromptContext request,
                                                  @PathVariable String sessionId,
                                                  @RequestParam(required = true) String type) {
-        PromptType promptType = PromptType.fromString(type);
-        if (promptType == null) {
+        ContextPromptType contextPromptType = ContextPromptType.fromString(type);
+        if (contextPromptType == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
-        switch (promptType) {
+        switch (contextPromptType) {
             case GITHUB -> githubPromptSystemContext.setSystemContext(request.context());
             case LINKEDIN -> linkedInPromptSystemContext.setSystemContext(request.context());
             case SKILLSQUERY -> skillsQueryPrompt.setSystemContext(request.context());
@@ -47,11 +47,11 @@ public class ContextTuningController {
     @GetMapping("/get/{sessionId}")
     public ResponseEntity<String> getPromptContext(@PathVariable String sessionId,
                                                    @RequestParam(required = true) String type) {
-        PromptType promptType = PromptType.fromString(type);
-        if (promptType == null) {
+        ContextPromptType contextPromptType = ContextPromptType.fromString(type);
+        if (contextPromptType == null) {
             return ResponseEntity.badRequest().body("Unknown prompt context type: " + type);
         }
-        String context = switch (promptType) {
+        String context = switch (contextPromptType) {
             case GITHUB -> githubPromptSystemContext.getSystemContext();
             case LINKEDIN -> linkedInPromptSystemContext.getSystemContext();
             case SKILLSQUERY -> skillsQueryPrompt.getSystemContext();
