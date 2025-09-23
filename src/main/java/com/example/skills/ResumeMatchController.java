@@ -22,8 +22,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.Resource;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -33,8 +31,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @RestController
 @RequestMapping("/resume-match")
 public class ResumeMatchController {
-    private final ChatPromptSystemContext githubPromptSystemContext;
-    // Add Class level logger
     Logger logger = LoggerFactory.getLogger(ResumeMatchController.class);
 
     @Value("classpath:/resume-ranking-template.txt")
@@ -75,7 +71,7 @@ public class ResumeMatchController {
                                  ChatClient githubMcpServerChatClient,
                                  ToolCallbackProvider tools,
                                  ResumeAgent resumeAgent,
-                                 ApplicationContext applicationContext, ChatPromptSystemContext githubPromptSystemContext) {
+                                 ApplicationContext applicationContext) {
         this.resumeAgent = resumeAgent;
         this.applicationContext = applicationContext;
 
@@ -86,7 +82,6 @@ public class ResumeMatchController {
                 .build();
 
         this.githubMcpServerChatClient = githubMcpServerChatClient;
-        this.githubPromptSystemContext = githubPromptSystemContext;
     }
 
     @PostMapping("/query")
@@ -243,39 +238,6 @@ public class ResumeMatchController {
         return repos;
     }
 
-    @PostMapping("/context/set/{sessionId}")
-    public ResponseEntity<Void> setGitHubPromptContext(@RequestBody PromptContext request,
-                                                       @PathVariable String sessionId,
-                                                       @RequestParam(required = true) String type) {
-
-        switch (type) {
-            case "github" -> githubPromptSystemContext.setSystemContext(request.context());
-            case "linkedin" -> linkedInPromptSystemContext.setSystemContext(request.context());
-            case "skillsquery" -> skillsQueryPrompt.setSystemContext(request.context());
-            default -> {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-
-        }
-
-        return ResponseEntity.ok().build();
-    }
-
-    @GetMapping("/context/get/{sessionId}")
-    public ResponseEntity<String> getPromptContext(@PathVariable String sessionId,
-                                                   @RequestParam(required = true) String type) {
-        String context = "Unknown prompt context type: " + type;
-        switch (type) {
-            case "github" -> context = githubPromptSystemContext.getSystemContext();
-            case "linkedin" -> context = linkedInPromptSystemContext.getSystemContext();
-            case "skillsquery" -> context = skillsQueryPrompt.getSystemContext();
-            default -> {
-                return ResponseEntity.badRequest().body(context);
-            }
-        }
-        return ResponseEntity.ok(context);
-    }
-
     @GetMapping("/chat/history/{sessionId}")
     public Map<String, Object> getChatHistory(@PathVariable String sessionId) {
         List<Message> history = chatHistories.getOrDefault(sessionId, Collections.emptyList());
@@ -339,4 +301,3 @@ public class ResumeMatchController {
         return uniqueResumes;
     }
 }
-

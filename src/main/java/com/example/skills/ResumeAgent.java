@@ -260,24 +260,4 @@ public class ResumeAgent {
                 })
                 .toList();
     }
-
-    record ScoredDoc(Document d, double score) {}
-    private static double documentScore(Document d) {
-        double score = 0.0;  // Fallback: neutral score if backend didn't return a distance
-
-        // A future version of Spring AI may provide to the score in document metadata
-        Object dist = d.getMetadata().getOrDefault("distance",
-                        d.getMetadata().getOrDefault("dist",
-                        d.getMetadata().getOrDefault("score", null)));
-
-        if (dist instanceof Number n) {
-            double distance = n.doubleValue();
-            // COSINE_DISTANCE configured -> similarity = 1 - distance
-            score = 1.0 - distance;
-        } else if (d.getScore() != null) {
-            score = 1.0 - d.getScore();
-        }
-
-        return score;
-    }
 }
