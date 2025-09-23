@@ -28,6 +28,9 @@ public class ResumeAgent {
     @Value("${app.match.top-k-documents}")
     private long rerankedDocumentsTopK;
 
+    @Value("${app.match.chunk-window-size}")
+    private int chunkWindowSize;
+
     private final VectorStore vectorStore;
     private final HypotheticalSearchStrategy hypotheticalSearchStrategy;
     private final JdbcTemplate jdbcTemplate;
@@ -147,7 +150,10 @@ public class ResumeAgent {
                 .collect(Collectors.groupingBy(d -> (String) d.getMetadata().get("groupId")));
 
         for (var e : documentsByGroupId.entrySet()) {
-            scoresByGroupId.put(e.getKey(), aggregatedSoftMaxScore(e.getValue()));
+//            scoresByGroupId.put(e.getKey(), aggregatedSoftMaxScore(e.getValue()));
+            scoresByGroupId.put(e.getKey(), e.getValue().stream().max(Comparator.comparingDouble(Document::getScore))
+                    .map(Document::getScore)
+                    .orElse(0.0));
         }
 
         return scoresByGroupId;
@@ -193,18 +199,27 @@ public class ResumeAgent {
         List<Document> results = new ArrayList<>();
 
         for (String gid : topGroupIds) {
-            List<Document> allChunks = fetchAllGroupChunks(gid, userPrompt);
+//            List<Document> allChunks = fetchAllGroupChunks(gid, userPrompt);
+//            String stitched = allChunks.stream()
+//                    .sorted(Comparator.comparingInt(sd -> ((Number)
+//                            sd.getMetadata().getOrDefault("chunkIndex", 0)).intValue()))
+//                    .map(Document::getText)
+//                    .collect(Collectors.joining("\n---\n"));
+
+            List<Document> windowedChunks = centeredGroupWindow(fetchAllGroupChunks(gid, userPrompt), chunkWindowSize);
+
+            if (windowedChunks.isEmpty()) {
+                logger.warn("No chunks found for groupId: " + gid);
+                continue;
+            }
 
             // "stitch" the chunks together to form a single text blob,
-            // TODO - Attempt to center around on the best scoring chunk?
-            String stitched = allChunks.stream()
-                    .sorted(Comparator.comparingInt(sd -> ((Number)
-                            sd.getMetadata().getOrDefault("chunkIndex", 0)).intValue()))
+            String stitched = windowedChunks.stream()
                     .map(Document::getText)
                     .collect(Collectors.joining("\n---\n"));
 
             // There must be at least one Document (chunk) for the groupId from which to get the filename.
-            Map<String, Object> metadata = allChunks.getFirst().getMetadata();
+            Map<String, Object> metadata = windowedChunks.getFirst().getMetadata();
             metadata.put("score", groupScores.getOrDefault(gid, 0.0d));
             results.add(new Document(stitched, metadata));
         }
@@ -212,8 +227,41 @@ public class ResumeAgent {
         return results;
     }
 
-    record ScoredDoc(Document d, double score) {}
+    protected static List<Document> centeredGroupWindow(List<Document> chunks, int windowSize) {
+        if (chunks.isEmpty()) return chunks;
+        if (chunks.size() <= windowSize) return chunks;
 
+        // Highest scoring chunk
+        Document bestChunk = Collections.max(chunks, Comparator.comparingDouble(d -> d.getScore() != null ? d.getScore() : 0.0));
+        int indexOfBestChunk = Integer.parseInt(bestChunk.getMetadata().getOrDefault("chunkIndex", 0).toString());
+        int halfWindowSize = windowSize / 2;
+        int start;
+        int end;
+
+        // If highest scoring chunk is close enough to the start, then start index = 0
+        if ((indexOfBestChunk - halfWindowSize) <= 0) {
+            start = 0;
+            end = windowSize - 1;
+        } else if ((indexOfBestChunk + halfWindowSize) >= chunks.size()) {
+            // If highest scoring chunk is close enough to the end, then start index = end - (windowSize - 1)
+            end = chunks.size() - 1;
+            start = end - windowSize;
+        } else {
+            // Otherwise center the window around the highest scoring chunk
+            start = indexOfBestChunk - halfWindowSize;
+            end = indexOfBestChunk + halfWindowSize;
+        }
+
+        return chunks.stream()
+                .sorted(Comparator.comparingInt(d -> Integer.parseInt(d.getMetadata().getOrDefault("chunkIndex", 0).toString())))
+                .filter(d -> {
+                    int idx = Integer.parseInt(d.getMetadata().getOrDefault("chunkIndex", 0).toString());
+                    return idx >= start && idx <= end;
+                })
+                .toList();
+    }
+
+    record ScoredDoc(Document d, double score) {}
     private static double documentScore(Document d) {
         double score = 0.0;  // Fallback: neutral score if backend didn't return a distance
 

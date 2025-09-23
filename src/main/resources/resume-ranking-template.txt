@@ -3,8 +3,11 @@ Using the skills and job requirements contained in the USER QUERY, rank the prov
 the RESUMES section from best to worst match.
 Do not consider case sensitivity when matching skills.
 Return a JSON array ranking the candidates from best to worst match in accordance with the candidate resume ranking.
-Each item must include: candidateId, finalScore (0-100), and a short summary of what matched and didn't match for each candidate resume.
-In addition, each item should include a GitHub repository url if one is found in the resume.
+Each item must include: candidateId, finalScore (0-100), and a shortExplanation field containing summary of what matched and didn't match for each candidate resume.
+In addition, each item in the array should include a GitHub repository url if one is found in the resume.
+Github urls can be found in the resume text following "GitHub URL: " or any other form of url any form of URL that matches the following regular expression (?:https:\/\/)?github\.com\/[A-Za-z0-9/_-]*'.
+If no github url is found, set the "github" field to null.
+If a linkedin url is found in the resume, include it in the "linkedin" field, otherwise set it to null.
 
 Your resume matching and ranking algorithm is using a cosine similarity model between embeddings of the user query and the resume text.
 Of all vectors similar to the user prompt, prefer those that contain a github.com url.
@@ -17,20 +20,23 @@ RESUMES:
 
 Use the 'ResumeSnippet' and 'InitialScore' fields to determine the best match for the user query.
 
-Result should be in the following JSON format:
-[{{"candidateId":"candidate-id", "finalScore": 85, "shortExplanation":"Reason for score", "linkedin": null, "github": null }}]
-
 IMPORTANT:
     1. Resume file extensions can include: .pdf, .docx, .txt.
     2. The "candidateId" field should contain candidateId from the resume.
-    3. Set the "github" field to the url following "GitHub URL: " or any other form of url any form of URL that matches the following regular expression (?:https:\/\/)?github\.com\/[A-Za-z0-9/_-]*'.
-    4. If no github url is found, set the "github" field to null.
-    5. Do not attempt to access any external systems or databases.
-    6. Do not use any tools.
-    7. DO NOT return code. DO NOT explain your process.
-    8. Do not wrap the JSON result in any other text
-    9. Only return the JSON, nothing else.
+    3. Do not use an tools nor attempt to access any external systems or databases.
+    4. DO NOT return code. DO NOT explain your process.
+    5. JSON, nothing else; and do not wrap the JSON result in any other text
+    6. The JSON array must be valid and parsable and conform to the following structure:
+        Schema:
+        [
+            {
+              "candidateId": "string",
+              "finalScore": "integer (0-100)",
+              "shortExplanation": "string",
+              "linkedin": "string | null",
+              "github": "string | null"
+            }
+        ]
 
-Return a valid JSON array like this, and don't include any text outside the JSON array:
-[{{"candidateId":"candidate-id", "finalScore": 85, "shortExplanation":"Reason for score", "linkedin": null, "github": null }}]
+
 

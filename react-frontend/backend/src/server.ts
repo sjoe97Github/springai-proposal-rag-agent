@@ -54,8 +54,8 @@ app.get('/resume-match/context/get/:sessionId', (req, res) => {
             return res.status(400).json({ error: 'Session ID is required' });
         }
 
-        if (!contextType || !['github', 'linkedin'].includes(contextType)) {
-            return res.status(400).json({ error: 'Valid context type (github|linkedin) is required' });
+        if (!contextType || !['github', 'linkedin', 'skillsquery'].includes(contextType)) {
+            return res.status(400).json({ error: 'Valid context type (github|linkedin|skillsquery) is required' });
         }
 
         const context = dataStore.getPromptContext(sessionId, contextType);
@@ -82,8 +82,8 @@ app.post('/resume-match/context/set/:sessionId', (req, res) => {
             return res.status(400).json({ error: 'Session ID is required' });
         }
 
-        if (!contextType || !['github', 'linkedin'].includes(contextType)) {
-            return res.status(400).json({ error: 'Valid context type (github|linkedin) is required' });
+        if (!contextType || !['github', 'linkedin', 'skillsquery'].includes(contextType)) {
+            return res.status(400).json({ error: 'Valid context type (github|linkedin|skillsquery) is required' });
         }
 
         if (!context) {

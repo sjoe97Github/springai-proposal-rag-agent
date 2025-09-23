@@ -11,6 +11,7 @@ import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -30,11 +31,6 @@ public class SkillsMatcherApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(SkillsMatcherApplication.class, args);
-    }
-
-    @Bean
-    ChatClient chatClient(ChatClient.Builder chatClientBuilder) {
-        return chatClientBuilder.build();
     }
 
     @Autowired
@@ -60,11 +56,17 @@ public class SkillsMatcherApplication {
     }
 
     @Bean
-    ApplicationRunner toolDebugger(ChatClient chatClient) {
+    ApplicationRunner toolDebugger(ChatClient.Builder chatClientBuilder, ToolCallbackProvider tools) {
+        // Create ChatClient with MCP tools
+        ChatClient chatClient = chatClientBuilder
+                .defaultSystem("Answer all questions with complete sentences.")
+                .defaultToolCallbacks(tools)
+                .build();
+
         return args -> {
             String debugPrompt = "What tools are available to you?";
             ChatResponse response = chatClient.prompt(debugPrompt).call().chatResponse();
-            System.out.println("Available tools: " + response.getResult().getOutput().getText());
+            logger.info("Available tools: " + response.getResult().getOutput().getText());
         };
     }
 

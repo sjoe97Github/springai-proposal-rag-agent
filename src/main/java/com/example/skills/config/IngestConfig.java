@@ -31,4 +31,9 @@ public class IngestConfig {
     public ChatPromptSystemContext linkedInPromptSystemContext() {
         return new LinkedInLookupSystemContext();
     }
+
+    @Bean("skillsQueryPrompt")
+    public ChatPromptSystemContext skillsQueryPrompt() {
+        return new SkillsQueryPrompt();
+    }
 }

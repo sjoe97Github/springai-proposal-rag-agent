@@ -15,6 +15,7 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.template.st.StTemplateRenderer;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -49,6 +50,10 @@ public class ResumeMatchController {
     @Autowired
     @Qualifier("linkedInPromptSystemContext")
     private ChatPromptSystemContext linkedInPromptSystemContext;
+
+    @Autowired
+    @Qualifier("skillsQueryPrompt")
+    private ChatPromptSystemContext skillsQueryPrompt;
 
     private final ResumeAgent resumeAgent;
 
@@ -107,13 +112,21 @@ public class ResumeMatchController {
         String resumeContext = formatResumesForPrompt(similarResumes);
 
         // Get prompt template
-        String promptText = getPromptTemplate(sessionId);
+        String promptText = skillsQueryPrompt.getSystemContext();
 
         // Create prompt with parameters
-        PromptTemplate template = new PromptTemplate(promptText);
         Map<String, Object> params = new HashMap<>();
         params.put("input", query.getQuery());
         params.put("ranked_resumes", resumeContext);
+        PromptTemplate template = PromptTemplate.builder()
+                .renderer(
+                        StTemplateRenderer
+                        .builder().startDelimiterToken('<')
+                        .endDelimiterToken('>')
+                        .build())
+                .template(promptText)
+                .variables(params)
+                .build();
 
         Prompt prompt = template.create(params);
 
@@ -134,8 +147,16 @@ public class ResumeMatchController {
         //        method to extract structured data from whatever shape is returned in the chat response.
         ResumeResult[] resumeResults = new ResumeResult[0];
         try {
-            // TODO - Crude Workaround! If the response string does not start and end with square brackets,
-            //                          add them to form a valid JSON array
+            // Trim any leading/trailing ```json ``` wrapper, if present.
+            response = response.trim();
+            if (response.startsWith("```json")) {
+                response = response.substring(7).trim();
+            }
+            if (response.endsWith("```")) {
+                response = response.substring(0, response.length() - 3).trim();
+            }
+
+            // If the response string does not start and end with square brackets, add them to form a valid JSON array
             if (!response.trim().startsWith("[")) {
                 response = "[" + response;
             }
@@ -230,6 +251,7 @@ public class ResumeMatchController {
         switch (type) {
             case "github" -> githubPromptSystemContext.setSystemContext(request.context());
             case "linkedin" -> linkedInPromptSystemContext.setSystemContext(request.context());
+            case "skillsquery" -> skillsQueryPrompt.setSystemContext(request.context());
             default -> {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
@@ -246,6 +268,7 @@ public class ResumeMatchController {
         switch (type) {
             case "github" -> context = githubPromptSystemContext.getSystemContext();
             case "linkedin" -> context = linkedInPromptSystemContext.getSystemContext();
+            case "skillsquery" -> context = skillsQueryPrompt.getSystemContext();
             default -> {
                 return ResponseEntity.badRequest().body(context);
             }
@@ -275,7 +298,7 @@ public class ResumeMatchController {
                         + "Given a user job/skills query and a set of candidate resumes, "
                         + "return a JSON array ranking the candidates from best to worst match. "
                         + "Each item must include: candidateId, finalScore (0-100), and shortExplanation."
-                        + "\n\nUSER QUERY:\n{input}\n\nRESUMES:\n{resume_contexts}\n\n"
+                        + "\n\nSKILL_QUERY:\n{input}\n\nRESUMES:\n{resume_contexts}\n\n"
                         + "Return ONLY JSON like:\n"
                         + "[{\"candidateId\":\"...\", \"finalScore\": 0-100, \"shortExplanation\":\"...\"}]";
             }
