@@ -3,6 +3,8 @@ package com.example.skills;
 import com.example.skills.datatypes.PromptContext;
 import com.example.skills.datatypes.ContextPromptType;
 import ingest.ChatPromptSystemContext;
+import match.AggregateGroupScoreType;
+import match.AggregateScoringAlgorithm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,9 +14,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/resume-match/context")
-public class ContextTuningController {
-    Logger logger = LoggerFactory.getLogger(ContextTuningController.class);
+@RequestMapping("/resume-match")
+public class ResumeAgentTuningController {
+    Logger logger = LoggerFactory.getLogger(ResumeAgentTuningController.class);
 
     @Autowired
     @Qualifier("githubPromptSystemContext")
@@ -28,7 +30,10 @@ public class ContextTuningController {
     @Qualifier("skillsQueryPrompt")
     private ChatPromptSystemContext skillsQueryPrompt;
 
-    @PostMapping("/set/{sessionId}")
+    @Autowired
+    private AggregateScoringAlgorithm aggregateScoringAlgorithm;
+
+    @PostMapping("/context/set/{sessionId}")
     public ResponseEntity<Void> setPromptContext(@RequestBody PromptContext request,
                                                  @PathVariable String sessionId,
                                                  @RequestParam(required = true) String type) {
@@ -44,7 +49,7 @@ public class ContextTuningController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/get/{sessionId}")
+    @GetMapping("/context/get/{sessionId}")
     public ResponseEntity<String> getPromptContext(@PathVariable String sessionId,
                                                    @RequestParam(required = true) String type) {
         ContextPromptType contextPromptType = ContextPromptType.fromString(type);
@@ -57,5 +62,22 @@ public class ContextTuningController {
             case SKILLSQUERY -> skillsQueryPrompt.getSystemContext();
         };
         return ResponseEntity.ok(context);
+    }
+
+    @PutMapping("/aggregate-score/set/{sessionId}/{type}")
+    public ResponseEntity<String> setAggregateGroupScore(@RequestBody PromptContext request,
+                                                 @PathVariable String sessionId,
+                                                 @PathVariable String type) {
+        AggregateGroupScoreType aggregateGroupScoreType = AggregateGroupScoreType.fromString(type);
+        if (aggregateGroupScoreType == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+        aggregateScoringAlgorithm.setScoringAlgorithm(type);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/aggregate-score/get/{sessionId}")
+    public ResponseEntity<String> getAggregateGroupScore(@PathVariable String sessionId) {
+        return ResponseEntity.ok(aggregateScoringAlgorithm.getScoringAlgorithm());
     }
 }

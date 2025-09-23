@@ -23,9 +23,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 import com.example.skills.config.IngestProperties;
+import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
 @EnableConfigurationProperties(IngestProperties.class)
+@ComponentScan(basePackages = {"com.example.skills", "match"})
 public class SkillsMatcherApplication {
     private static final Logger logger = Logger.getLogger(SkillsMatcherApplication.class);
 

@@ -22,6 +22,8 @@ app:
     top-k-documents: 5
     softmax-temperature: 0.10
     chunk-window-size: 3
+    # sum, avg, max, softmax
+    aggregate-group-score: max
 
   ingest:
     skipResumeIngest: true

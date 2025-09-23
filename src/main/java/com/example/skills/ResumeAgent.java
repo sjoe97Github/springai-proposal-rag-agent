@@ -1,5 +1,7 @@
 package com.example.skills;
 
+import match.AggregateGroupScoreType;
+import match.AggregateScoringAlgorithm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -33,11 +35,16 @@ public class ResumeAgent {
 
     private final VectorStore vectorStore;
     private final HypotheticalSearchStrategy hypotheticalSearchStrategy;
+    private final AggregateScoringAlgorithm aggregateScoringAlgorithm;
     private final JdbcTemplate jdbcTemplate;
 
-    public ResumeAgent(VectorStore vectorStore, HypotheticalSearchStrategy hypotheticalSearchStrategy, JdbcTemplate jdbcTemplate) {
+    public ResumeAgent(VectorStore vectorStore,
+                       HypotheticalSearchStrategy hypotheticalSearchStrategy,
+                       AggregateScoringAlgorithm aggregateScoringAlgorithm,
+                       JdbcTemplate jdbcTemplate) {
         this.vectorStore = vectorStore;
         this.hypotheticalSearchStrategy = hypotheticalSearchStrategy;
+        this.aggregateScoringAlgorithm = aggregateScoringAlgorithm;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -77,11 +84,6 @@ public class ResumeAgent {
         // ============================================================================================
         //
 
-        /* Rerank similarity search chunks using softmax-weighted score.
-            Organize chunks by groupId and re-score the groups of chunks as an aggregated whole, effectively scoring
-            each group of related chunks.  Where related chunks are parts of the same resume.
-            Map<String, Double> rerankedGroups = groupAndScore(results);
-        */
         Map<String, Double> rerankedGroups = groupAndScore(results);
 
         // Pick the top groupIds from reranked groups.
@@ -142,6 +144,13 @@ public class ResumeAgent {
         return groupScores;
     }
 
+    /**
+     * Organize chunks by groupId (by resume) and compute a score for each group. Then return a map of groupId to score
+     * which is effectively a map of resume to score.
+     *
+     * @param docs - list of chunks (documents) returned by similarity search
+     * @return map of groupId to score (effectively a map of resume to score)
+     */
     private Map<String, Double> groupAndScore(List<Document> docs) {
         Map<String, Double> scoresByGroupId = new HashMap<>();
 
@@ -150,13 +159,35 @@ public class ResumeAgent {
                 .collect(Collectors.groupingBy(d -> (String) d.getMetadata().get("groupId")));
 
         for (var e : documentsByGroupId.entrySet()) {
-//            scoresByGroupId.put(e.getKey(), aggregatedSoftMaxScore(e.getValue()));
-            scoresByGroupId.put(e.getKey(), e.getValue().stream().max(Comparator.comparingDouble(Document::getScore))
-                    .map(Document::getScore)
-                    .orElse(0.0));
+            scoresByGroupId.put(e.getKey(), aggregateGroupScore(e.getValue()));
         }
 
         return scoresByGroupId;
+    }
+
+    private double aggregateGroupScore(List<Document> docs) {
+        AggregateGroupScoreType type = AggregateGroupScoreType.fromString(aggregateScoringAlgorithm.getScoringAlgorithm());
+        if (type == null) {
+            return 0.0;
+        }
+        return switch (type) {
+            case SUM -> aggregatedSumScore(docs);
+            case AVG -> aggregatedAvgScore(docs);
+            case MAX -> aggregatedMaxScore(docs);
+            case SOFTMAX -> aggregatedSoftMaxScore(docs);
+        };
+    }
+
+    private double aggregatedAvgScore(List<Document> docs) {
+        return docs.stream().mapToDouble(Document::getScore).average().orElse(0.0);
+    }
+
+    private double aggregatedSumScore(List<Document> docs) {
+        return docs.stream().mapToDouble(Document::getScore).sum();
+    }
+
+    private double aggregatedMaxScore(List<Document> docs) {
+        return docs.stream().mapToDouble(Document::getScore).max().orElse(0.0);
     }
 
     private double aggregatedSoftMaxScore(List<Document> docs) {
@@ -183,12 +214,15 @@ public class ResumeAgent {
     }
 
     List<Document> fetchAllGroupChunks(String groupId, String userPrompt) {
-        int maxChunksPerGroup = 20;  // TODO - Why 20? Make configurable?
+        // TODO - Why 20? Consider making configurable?
+        int maxChunksPerGroup = 20;
+
+        // TODO - Consider making filter and query configurable as different vector stores may require different values.
         SearchRequest sr = SearchRequest.builder()
-                // query can be empty-ish; we’re filtering by groupId and not relying on similarity here
+                // The query can't be empty otherwise an exception is thrown; however,
+                // we’re filtering by groupId and not relying on similarity here so the query is not important.
                 .query(userPrompt)
                 .topK(maxChunksPerGroup)
-//                .filterExpression("metadata->>'groupId' == '" + groupId + "'")
                 .filterExpression("groupId == '" + groupId + "'")
                 .build();
 
@@ -199,13 +233,6 @@ public class ResumeAgent {
         List<Document> results = new ArrayList<>();
 
         for (String gid : topGroupIds) {
-//            List<Document> allChunks = fetchAllGroupChunks(gid, userPrompt);
-//            String stitched = allChunks.stream()
-//                    .sorted(Comparator.comparingInt(sd -> ((Number)
-//                            sd.getMetadata().getOrDefault("chunkIndex", 0)).intValue()))
-//                    .map(Document::getText)
-//                    .collect(Collectors.joining("\n---\n"));
-
             List<Document> windowedChunks = centeredGroupWindow(fetchAllGroupChunks(gid, userPrompt), chunkWindowSize);
 
             if (windowedChunks.isEmpty()) {
