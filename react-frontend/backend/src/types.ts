@@ -44,3 +44,21 @@ export interface ChatHistoryResponse {
 
 // Context types supported by the system
 export type ContextType = 'github' | 'linkedin';
+
+// Aggregate score types - matching Java enum values
+export type AggregateScoreType = 'sum' | 'avg' | 'max' | 'softmax';
+
+// Aggregate score interfaces
+export interface AggregateScore {
+    type: AggregateScoreType;
+    score: string;
+}
+
+export interface AggregateScoreResponse {
+    sessionId: string;
+    aggregateScore: string;
+}
+
+export interface SetAggregateScoreRequest {
+    score: string;
+}

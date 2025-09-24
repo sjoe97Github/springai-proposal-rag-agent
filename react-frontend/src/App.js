@@ -33,6 +33,14 @@ function App() {
     // State for Chat History
     const [chatHistoryResults, setChatHistoryResults] = useState('');
 
+    // State for Get Aggregate Score
+    const [getAggregateResults, setGetAggregateResults] = useState('');
+
+    // State for Set Aggregate Score
+    const [setAggregateType, setSetAggregateType] = useState('sum');
+    const [aggregateScoreToSet, setAggregateScoreToSet] = useState('');
+    const [setAggregateResults, setSetAggregateResults] = useState('');
+
     const setLoadingState = (endpoint, isLoading) => {
         setLoading(prev => ({ ...prev, [endpoint]: isLoading }));
     };
@@ -134,6 +142,59 @@ function App() {
         setLoadingState('chatHistory', false);
     };
 
+    const handleGetAggregateScore = async () => {
+        setLoadingState('getAggregateScore', true);
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/aggregate-score/get/${encodeURIComponent(sessionId)}`
+            );
+
+            if (response.ok) {
+                const data = await response.text();
+                setGetAggregateResults(data);
+            } else {
+                const errorData = await response.text();
+                setGetAggregateResults(`Error ${response.status}: ${errorData}`);
+            }
+        } catch (error) {
+            setGetAggregateResults(`Error: ${error.message}`);
+        }
+        setLoadingState('getAggregateScore', false);
+    };
+
+    const handleSetAggregateScore = async () => {
+        if (!aggregateScoreToSet.trim()) {
+            alert('Please enter a score value');
+            return;
+        }
+
+        setLoadingState('setAggregateScore', true);
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/aggregate-score/set/${encodeURIComponent(sessionId)}/${encodeURIComponent(setAggregateType)}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        score: aggregateScoreToSet
+                    }),
+                }
+            );
+
+            if (response.ok) {
+                setSetAggregateResults('Aggregate score set successfully');
+            } else {
+                const errorData = await response.text();
+                setSetAggregateResults(`Error ${response.status}: ${errorData}`);
+            }
+        } catch (error) {
+            setSetAggregateResults(`Error: ${error.message}`);
+        }
+        setLoadingState('setAggregateScore', false);
+    };
+
     return (
         <div className="app">
             <h1>Resume Match Controller</h1>
@@ -181,6 +242,7 @@ function App() {
                     >
                         <option value="github">GitHub</option>
                         <option value="linkedin">LinkedIn</option>
+                        <option value="skillsquery">Skills Query</option>
                     </select>
                 </div>
                 <button onClick={handleGetPromptContext} className="submit-button">
@@ -211,6 +273,7 @@ function App() {
                     >
                         <option value="github">GitHub</option>
                         <option value="linkedin">LinkedIn</option>
+                        <option value="skillsquery">Skills Query</option>
                     </select>
                 </div>
                 <div className="form-group">
@@ -253,6 +316,67 @@ function App() {
               readOnly
               className="results-textbox"
               placeholder="Chat history will appear here..."
+          />
+                </div>
+            </div>
+
+            {/* Get Aggregate Score Section */}
+            <div className="section">
+                <h2>5. Get Aggregate Score</h2>
+                <button onClick={handleGetAggregateScore} className="submit-button">
+                    Get Aggregate Score
+                </button>
+
+                {loading.getAggregateScore && <div className="spinner">Loading...</div>}
+                <div className="results-container">
+          <textarea
+              value={getAggregateResults}
+              readOnly
+              className="results-textbox"
+              placeholder="Aggregate score will appear here..."
+          />
+                </div>
+            </div>
+
+            {/* Set Aggregate Score Section */}
+            <div className="section">
+                <h2>6. Set Aggregate Score</h2>
+                <div className="form-group">
+                    <label htmlFor="setAggregateType">Score Type:</label>
+                    <select
+                        id="setAggregateType"
+                        value={setAggregateType}
+                        onChange={(e) => setSetAggregateType(e.target.value)}
+                        className="select-field"
+                    >
+                        <option value="sum">Sum</option>
+                        <option value="avg">Average</option>
+                        <option value="max">Max</option>
+                        <option value="softmax">Softmax</option>
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label htmlFor="aggregateScoreToSet">Aggregate Score:</label>
+                    <input
+                        type="text"
+                        id="aggregateScoreToSet"
+                        value={aggregateScoreToSet}
+                        onChange={(e) => setAggregateScoreToSet(e.target.value)}
+                        placeholder="Enter score value"
+                        className="input-field"
+                    />
+                </div>
+                <button onClick={handleSetAggregateScore} className="submit-button">
+                    Set Aggregate Score
+                </button>
+
+                {loading.setAggregateScore && <div className="spinner">Loading...</div>}
+                <div className="results-container">
+          <textarea
+              value={setAggregateResults}
+              readOnly
+              className="results-textbox"
+              placeholder="Set aggregate score results will appear here..."
           />
                 </div>
             </div>

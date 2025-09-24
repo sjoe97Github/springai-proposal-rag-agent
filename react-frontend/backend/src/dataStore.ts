@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { ResumeResult, ResumeMatchResponse, Message, ContextType } from './types';
+import { ResumeResult, ResumeMatchResponse, Message, ContextType, AggregateScoreType } from './types';
 import { DEFAULT_CONTEXT_TYPE, GITHUB_DEFAULT_CONTEXT } from './constants';
 
 export class DataStore {
@@ -8,12 +8,14 @@ export class DataStore {
     private allCandidates: ResumeResult[];
     private contextStore: Map<string, Map<ContextType, string>>;
     private chatHistoryStore: Map<string, Message[]>;
+    private aggregateScoreStore: Map<string, Map<AggregateScoreType, string>>;
 
     constructor() {
         this.resumeMatchData = this.loadResumeMatchData();
         this.allCandidates = this.extractAllCandidates();
         this.contextStore = new Map();
         this.chatHistoryStore = new Map();
+        this.aggregateScoreStore = new Map();
     }
 
     private loadResumeMatchData(): ResumeMatchResponse[] {
@@ -195,5 +197,28 @@ export class DataStore {
         // Store it for this session
         this.chatHistoryStore.set(sessionId, defaultHistory);
         return defaultHistory;
+    }
+
+    public getAggregateScore(sessionId: string): string {
+        const sessionScores = this.aggregateScoreStore.get(sessionId);
+        if (!sessionScores || sessionScores.size === 0) {
+            return '';
+        }
+
+        // Return the first score found (you may want to modify this logic)
+        const firstScore = sessionScores.values().next().value;
+        return firstScore || '';
+    }
+
+    public setAggregateScore(sessionId: string, type: AggregateScoreType, score: string): void {
+        if (!this.aggregateScoreStore.has(sessionId)) {
+            this.aggregateScoreStore.set(sessionId, new Map());
+        }
+        const sessionScores = this.aggregateScoreStore.get(sessionId)!;
+        sessionScores.set(type, score);
+    }
+
+    public isValidAggregateScoreType(type: string): type is AggregateScoreType {
+        return ['sum', 'avg', 'max', 'softmax'].includes(type);
     }
 }

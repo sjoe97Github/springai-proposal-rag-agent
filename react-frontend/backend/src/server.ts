@@ -4,7 +4,9 @@ import {
     JobQuery,
     ResumeMatchResponse,
     ChatHistoryResponse,
-    ContextType
+    ContextType,
+    AggregateScoreResponse,
+    SetAggregateScoreRequest
 } from './types';
 import { DataStore } from './dataStore';
 
@@ -117,6 +119,59 @@ app.get('/resume-match/chat/history/:sessionId', (req, res) => {
         res.json(response);
     } catch (error) {
         console.error('Error in /resume-match/chat/history:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET /resume-match/aggregate-score/get/:sessionId - Get aggregate score for a session
+app.get('/resume-match/aggregate-score/get/:sessionId', (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Session ID is required' });
+        }
+
+        const aggregateScore = dataStore.getAggregateScore(sessionId);
+
+        const response: AggregateScoreResponse = {
+            sessionId,
+            aggregateScore
+        };
+
+        res.json(response);
+    } catch (error) {
+        console.error('Error in /resume-match/aggregate-score/get:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// PUT /resume-match/aggregate-score/set/:sessionId/:type - Set aggregate score for a session and type
+app.put('/resume-match/aggregate-score/set/:sessionId/:type', (req, res) => {
+    try {
+        const { sessionId, type } = req.params;
+        const { score }: SetAggregateScoreRequest = req.body;
+
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Session ID is required' });
+        }
+
+        if (!type) {
+            return res.status(400).json({ error: 'Score type is required' });
+        }
+
+        if (!dataStore.isValidAggregateScoreType(type)) {
+            return res.status(400).json({ error: 'Invalid score type. Must be one of: sum, avg, max, softmax' });
+        }
+
+        if (score === undefined || score === null || typeof score !== 'string') {
+            return res.status(400).json({ error: 'Valid score (string) is required' });
+        }
+
+        dataStore.setAggregateScore(sessionId, type, score);
+        res.send('Aggregate score set successfully');
+    } catch (error) {
+        console.error('Error in /resume-match/aggregate-score/set:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
