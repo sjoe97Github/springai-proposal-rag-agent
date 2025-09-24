@@ -8,7 +8,7 @@ export class DataStore {
     private allCandidates: ResumeResult[];
     private contextStore: Map<string, Map<ContextType, string>>;
     private chatHistoryStore: Map<string, Message[]>;
-    private aggregateScoreStore: Map<string, Map<AggregateScoreType, string>>;
+    private aggregateScoreStore: Map<string, string>;
 
     constructor() {
         this.resumeMatchData = this.loadResumeMatchData();
@@ -200,22 +200,11 @@ export class DataStore {
     }
 
     public getAggregateScore(sessionId: string): string {
-        const sessionScores = this.aggregateScoreStore.get(sessionId);
-        if (!sessionScores || sessionScores.size === 0) {
-            return '';
-        }
-
-        // Return the first score found (you may want to modify this logic)
-        const firstScore = sessionScores.values().next().value;
-        return firstScore || '';
+        return this.aggregateScoreStore.get(sessionId) || 'sum';
     }
 
-    public setAggregateScore(sessionId: string, type: AggregateScoreType, score: string): void {
-        if (!this.aggregateScoreStore.has(sessionId)) {
-            this.aggregateScoreStore.set(sessionId, new Map());
-        }
-        const sessionScores = this.aggregateScoreStore.get(sessionId)!;
-        sessionScores.set(type, score);
+    public setAggregateScore(sessionId: string, score: string): void {
+        this.aggregateScoreStore.set(sessionId, score);
     }
 
     public isValidAggregateScoreType(type: string): type is AggregateScoreType {

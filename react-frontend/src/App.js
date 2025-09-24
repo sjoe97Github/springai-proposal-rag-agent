@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-const API_BASE_URL = 'http://localhost:8080/resume-match';
+const API_BASE_URL = 'http://localhost:3001/resume-match';
 
 // Generate a random sessionId
 const generateSessionId = () => {
@@ -38,7 +38,6 @@ function App() {
 
     // State for Set Aggregate Score
     const [setAggregateType, setSetAggregateType] = useState('sum');
-    const [aggregateScoreToSet, setAggregateScoreToSet] = useState('');
     const [setAggregateResults, setSetAggregateResults] = useState('');
 
     const setLoadingState = (endpoint, isLoading) => {
@@ -163,22 +162,17 @@ function App() {
     };
 
     const handleSetAggregateScore = async () => {
-        if (!aggregateScoreToSet.trim()) {
-            alert('Please enter a score value');
-            return;
-        }
-
         setLoadingState('setAggregateScore', true);
         try {
             const response = await fetch(
-                `${API_BASE_URL}/aggregate-score/set/${encodeURIComponent(sessionId)}/${encodeURIComponent(setAggregateType)}`,
+                `${API_BASE_URL}/aggregate-score/set/${encodeURIComponent(sessionId)}`,
                 {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        score: aggregateScoreToSet
+                        score: setAggregateType
                     }),
                 }
             );
@@ -354,17 +348,6 @@ function App() {
                         <option value="max">Max</option>
                         <option value="softmax">Softmax</option>
                     </select>
-                </div>
-                <div className="form-group">
-                    <label htmlFor="aggregateScoreToSet">Aggregate Score:</label>
-                    <input
-                        type="text"
-                        id="aggregateScoreToSet"
-                        value={aggregateScoreToSet}
-                        onChange={(e) => setAggregateScoreToSet(e.target.value)}
-                        placeholder="Enter score value"
-                        className="input-field"
-                    />
                 </div>
                 <button onClick={handleSetAggregateScore} className="submit-button">
                     Set Aggregate Score
