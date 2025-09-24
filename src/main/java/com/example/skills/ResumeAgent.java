@@ -95,27 +95,15 @@ public class ResumeAgent {
          */
         Map<String, Double> groupScores = gatherGroupChunksAndScoreGroups(topGroupIds, resumePrompt);
 
-        // Final doc ranking
+        // Order the top groupIds by their newly computed group (resume) scores
         List<String> orderedGroupIds = topGroupIds.stream()
             .sorted((grpId_a,grpId_b) -> Double.compare(groupScores.get(grpId_b), groupScores.get(grpId_a)))
             .toList();
 
         /*
             For each top groupId, aggregate (assemble) all chunks in the group, essentially reconstructing the resume
-            represented by the groupId.
-
-            Other possible aggregation strategies:
-             - Just return the single best chunk for each groupId
-             - Return the top N chunks for each groupId
-             - Return chunks until a certain token limit is reached
-             - Return a "window" of chunks around the best scoring chunk
-             - Return a collection of the highest scoring chunks that cover different sections of the resume
-             - Use a clustering algorithm to identify and select representative chunks from the group
-             - Use Maximal Marginal Relevance (MMR) to select diverse and relevant chunks
-             - Use a graph-based approach to identify and select the most central chunks in the group
-             - Use a machine learning model to predict the relevance of each chunk and select the top ones
-
-            Ultimately LLM can be used to summarize or extract key points from all chunks in the group
+            represented by the groupId.  Ultimately, an LLM can be used to summarize or extract key points from all
+            chunks in the group
         */
         return gatherGroupChunksTogether(orderedGroupIds, resumePrompt, groupScores);
     }
@@ -139,7 +127,7 @@ public class ResumeAgent {
                             .build()
             );
 
-            groupScores.put(gid, aggregatedSoftMaxScore(allGroupDocs));
+            groupScores.put(gid, aggregateGroupScore(allGroupDocs));
         }
         return groupScores;
     }

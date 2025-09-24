@@ -19,7 +19,7 @@ app:
   match:
     top-k-similarity: 200
     top-k-aggregate: 2000
-    top-k-documents: 5
+    top-k-documents: 4
     softmax-temperature: 0.10
     chunk-window-size: 3
     # sum, avg, max, softmax

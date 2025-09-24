@@ -1,5 +1,6 @@
 package com.example.skills;
 
+import com.example.skills.datatypes.AggregateScoreRequest;
 import com.example.skills.datatypes.PromptContext;
 import com.example.skills.datatypes.ContextPromptType;
 import ingest.ChatPromptSystemContext;
@@ -64,15 +65,15 @@ public class ResumeAgentTuningController {
         return ResponseEntity.ok(context);
     }
 
-    @PutMapping("/aggregate-score/set/{sessionId}/{type}")
-    public ResponseEntity<String> setAggregateGroupScore(@RequestBody PromptContext request,
-                                                 @PathVariable String sessionId,
-                                                 @PathVariable String type) {
-        AggregateGroupScoreType aggregateGroupScoreType = AggregateGroupScoreType.fromString(type);
+    @PutMapping("/aggregate-score/set/{sessionId}")
+    public ResponseEntity<Void> setAggregateGroupScore(@RequestBody AggregateScoreRequest request,
+                                                       @PathVariable String sessionId) {
+        String scoreType = request.getScore();
+        AggregateGroupScoreType aggregateGroupScoreType = AggregateGroupScoreType.fromString(scoreType);
         if (aggregateGroupScoreType == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
-        aggregateScoringAlgorithm.setScoringAlgorithm(type);
+        aggregateScoringAlgorithm.setScoringAlgorithm(scoreType);
         return ResponseEntity.ok().build();
     }
 

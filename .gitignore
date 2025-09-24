@@ -41,3 +41,6 @@ build/
 
 # Ignore node_modules in subfolders
 **/node_modules/*
+
+# Ignore UI related build files
+**/dist/*
