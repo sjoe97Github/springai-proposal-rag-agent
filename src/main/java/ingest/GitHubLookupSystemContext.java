@@ -36,6 +36,7 @@ public class GitHubLookupSystemContext implements ChatPromptSystemContext {
                 }
             ]
             
+            Don't make up repositories, only return those that actually exist.
             Do not wrap the JSON result in any other text.
             Only return the JSON, nothing else.
             """;

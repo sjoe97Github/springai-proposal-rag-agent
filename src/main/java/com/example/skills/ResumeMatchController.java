@@ -169,7 +169,7 @@ public class ResumeMatchController {
             query.getQuery(),
             resumeResults != null ? Arrays.asList(resumeResults) : Collections.emptyList()
         );
-        logger.info("result: {}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
+        logger.debug("pre-repo extraction result: {}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
 
         for (ResumeResult rr : result.results()) {
             List<GithubRep> repos = new ArrayList<>();
@@ -177,7 +177,7 @@ public class ResumeMatchController {
                 repos = getRepositories(rr);
                 rr.setReposList(repos);
             }
-            logger.debug("Repos for candidate {}: {}", rr.getCandidateId(), repos);
+            logger.trace("Repos for candidate {}: {}", rr.getCandidateId(), repos);
         }
 
         String finalResult = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);

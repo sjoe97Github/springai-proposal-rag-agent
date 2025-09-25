@@ -40,8 +40,15 @@ Your tasks:
 	•	When extracting URLs, copy the substring exactly as it appears between whitespace boundaries.
 	•	Ignore partials like “github dot com / user”.
 	•	If a URL ends with ), ,, ., ;, or : remove only that final character.
+
+
+	4.	candidateId extraction (STRICT)
+
+	•	Do not use the candidateId from the resume snippets.
+	•	Extract the value prefixed by Path: as the candidateId value in the JSON results.
+	•	Do not modify or reformat the extracted candidateId value in any way.
 	
-	4.	Output format (JSON only, no prose):
+	5.	Output format (JSON only, no prose):
 Return a JSON array of objects matching exactly this schema, sorted by finalScore desc:
 
 [

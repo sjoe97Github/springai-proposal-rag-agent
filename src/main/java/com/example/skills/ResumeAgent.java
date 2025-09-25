@@ -101,9 +101,9 @@ public class ResumeAgent {
             .toList();
 
         /*
-            For each top groupId, aggregate (assemble) all chunks in the group, essentially reconstructing the resume
-            represented by the groupId.  Ultimately, an LLM can be used to summarize or extract key points from all
-            chunks in the group
+            For each top groupId, aggregate (assemble) chunks in the group, essentially reconstructing a portion of
+            the resume represented by the groupId.  Ultimately, an LLM can be used to summarize or extract key points
+            from chunks in the group
         */
         return gatherGroupChunksTogether(orderedGroupIds, resumePrompt, groupScores);
     }
@@ -221,7 +221,8 @@ public class ResumeAgent {
         List<Document> results = new ArrayList<>();
 
         for (String gid : topGroupIds) {
-            List<Document> windowedChunks = centeredGroupWindow(fetchAllGroupChunks(gid, userPrompt), chunkWindowSize);
+//            List<Document> windowedChunks = centeredGroupWindow(fetchAllGroupChunks(gid, userPrompt), chunkWindowSize);
+            List<Document> windowedChunks = topChunksGroupWindow(fetchAllGroupChunks(gid, userPrompt), chunkWindowSize);
 
             if (windowedChunks.isEmpty()) {
                 logger.warn("No chunks found for groupId: " + gid);
@@ -274,5 +275,24 @@ public class ResumeAgent {
                     return idx >= start && idx <= end;
                 })
                 .toList();
+    }
+
+    /**
+     * A variation of centeredGroupWindow that always returns the top scoring N chunks in the group,
+     * after assuring that the chunks have been ordered by score descending.
+     *
+     * @param chunks
+     * @param windowSize
+     * @return
+     */
+    protected static List<Document> topChunksGroupWindow(List<Document> chunks, int windowSize) {
+        if (chunks.isEmpty()) return chunks;
+        if (chunks.size() <= windowSize) return chunks;
+
+        List<Document> topScoredWindow = chunks.stream().sorted(Comparator.comparingDouble((Document d) -> d.getScore() != null ? d.getScore() : 0.0).reversed())
+                .limit(windowSize)
+                .toList();
+
+        return topScoredWindow;
     }
 }

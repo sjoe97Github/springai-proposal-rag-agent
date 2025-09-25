@@ -54,20 +54,20 @@ spring:
         stdio:
           servers-configuration: classpath:mcp-servers.json
 
-    openai:
-      api-key: ${OPENAI_API_KEY}
-      chat:
-        options:
-#          model: gpt-5
-#          temperature: 1.0
-          model: gpt-4o-mini
-          temperature: 0.2
-#          max-tokens: 4096
-
-      embedding:
-        options:
-          model: text-embedding-ada-002
-          top-k: 3
+#    openai:
+#      api-key: ${OPENAI_API_KEY}
+#      chat:
+#        options:
+##          model: gpt-5
+##          temperature: 1.0
+#          model: gpt-4o-mini
+#          temperature: 0.2
+##          max-tokens: 4096
+#
+#      embedding:
+#        options:
+#          model: text-embedding-ada-002
+#          top-k: 3
 
     vectorstore:
       pgvector:
@@ -77,22 +77,25 @@ spring:
         #
         remove-existing-vector-store-table: false
         initialize-schema: true
-        dimensions: 1536
+#        dimensions: 1536
+        dimensions: 1024
         index-type: HNSW
         distance-type: COSINE_DISTANCE
 
-#      embedding:
-#        options:
-#          model: nomic-embed-text
-#          max-tokens: 4096
-#          top-k: 3
-#    ollama:
-#      base-url: http://localhost:11434
-#      chat:
-#        options:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
 #          model: mervinpraison/llama3.2-3B-instruct:8b
-#          temperature: 0.2
+          model: Llama3.3:latest
+          temperature: 0.2
 #
+      embedding:
+        options:
+#          model: nomic-embed-text
+          model: mxbai-embed-large
+          max-tokens: 4096
+          top-k: 3
 #    vectorstore:
 #      topk: 5
 #      pgvector:
