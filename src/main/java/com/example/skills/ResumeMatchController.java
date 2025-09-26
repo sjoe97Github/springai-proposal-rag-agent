@@ -104,34 +104,76 @@ public class ResumeMatchController {
         // TODO - Null check similarResumes?
         similarResumes = deduplicateResumes(similarResumes);
 
-        String resumeContext = formatResumesForPrompt(similarResumes);
+        // restructure results for further processing
+        List<RefinedDocument> refinedResumes = restructureResumeResults(similarResumes);
+        List<RefinedDocument> refinedResults = new ArrayList<>();
+        for (RefinedDocument rd : refinedResumes) {
+            // covert refined resumes to JSON string
+            String resumeContext = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rd);
 
-        // Get prompt template
-        String promptText = skillsQueryPrompt.getSystemContext();
+            // Get prompt template
+            String promptText = skillsQueryPrompt.getSystemContext();
 
-        // Create prompt with parameters
-        Map<String, Object> params = new HashMap<>();
-        params.put("input", query.getQuery());
-        params.put("ranked_resumes", resumeContext);
-        PromptTemplate template = PromptTemplate.builder()
-                .renderer(
-                        StTemplateRenderer
-                        .builder().startDelimiterToken('<')
-                        .endDelimiterToken('>')
-                        .build())
-                .template(promptText)
-                .variables(params)
-                .build();
+            // Create prompt with parameters
+            Map<String, Object> params = new HashMap<>();
+            params.put("input", query.getQuery());
+            params.put("ranked_resumes", resumeContext);
+            PromptTemplate template = PromptTemplate.builder()
+                    .renderer(
+                            StTemplateRenderer
+                                    .builder().startDelimiterToken('<')
+                                    .endDelimiterToken('>')
+                                    .build())
+                    .template(promptText)
+                    .variables(params)
+                    .build();
 
-        Prompt prompt = template.create(params);
+            Prompt prompt = template.create(params);
 
-        logger.info("Prompt: {}", prompt);
+            logger.info("Candidate Prompt: {}", prompt);
 
-        ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
+            ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
 
-        String response = chatResponse.getResult().getOutput().getText();
+            String response = chatResponse.getResult().getOutput().getText();
 
-        logger.info("AI Response: {}", response);
+            logger.info("AI Response: {}", response);
+
+            // As of now the response is a JSON array consisting of a single RefinedDocument object
+            RefinedDocument[] refinedDocs = objectMapper.readValue(response, RefinedDocument[].class);
+            refinedResults.add(refinedDocs[0]);
+        }
+//
+//        // covert refined resumes to JSON string
+//        String resumeContext = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(refinedResumes);
+//
+//        // Get prompt template
+//        String promptText = skillsQueryPrompt.getSystemContext();
+//
+//        // Create prompt with parameters
+//        Map<String, Object> params = new HashMap<>();
+//        params.put("input", query.getQuery());
+//        params.put("ranked_resumes", resumeContext);
+//        PromptTemplate template = PromptTemplate.builder()
+//                .renderer(
+//                        StTemplateRenderer
+//                        .builder().startDelimiterToken('<')
+//                        .endDelimiterToken('>')
+//                        .build())
+//                .template(promptText)
+//                .variables(params)
+//                .build();
+//
+//        Prompt prompt = template.create(params);
+//
+//        logger.info("Prompt: {}", prompt);
+//
+//        ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
+//
+//        String response = chatResponse.getResult().getOutput().getText();
+//
+//        logger.info("AI Response: {}", response);
+
+        String response = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(refinedResults);
 
         // Add to chat history
         chatHistory.add(new AssistantMessage(response));
@@ -266,19 +308,34 @@ public class ResumeMatchController {
             }
         }
     }
+//
+//    private String formatResumesForPrompt(List<Document> resumes) {
+//        StringBuilder sb = new StringBuilder();
+//        for (int i = 0; i < resumes.size(); i++) {
+//            Document doc = resumes.get(i);
+//            Map<String, Object> metadata = doc.getMetadata();
+//
+//            sb.append("CandidateID: ").append(metadata.getOrDefault("file", "unknown-" + i)).append("\n");
+//            sb.append("InitialScore: ").append(metadata.getOrDefault("score", 0.0d)).append("\n");
+//            sb.append("Path: ").append(metadata.getOrDefault("file", "unknown")).append("\n");
+//            sb.append("ResumeSnippet:\n").append(truncateText(doc.getText(), 2500)).append("\n\n");
+//        }
+//        return sb.toString();
+//    }
 
-    private String formatResumesForPrompt(List<Document> resumes) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < resumes.size(); i++) {
-            Document doc = resumes.get(i);
+    private List<RefinedDocument> restructureResumeResults(List<Document> resumes) {
+        List<RefinedDocument> refined = new ArrayList<>();
+        for (Document doc : resumes) {
             Map<String, Object> metadata = doc.getMetadata();
-
-            sb.append("CandidateID: ").append(metadata.getOrDefault("file", "unknown-" + i)).append("\n");
-            sb.append("InitialScore: ").append(metadata.getOrDefault("score", 0.0d)).append("\n");
-            sb.append("Path: ").append(metadata.getOrDefault("file", "unknown")).append("\n");
-            sb.append("ResumeSnippet:\n").append(truncateText(doc.getText(), 2500)).append("\n\n");
+            RefinedDocument rd = new RefinedDocument(
+                metadata.getOrDefault("file", "unknown").toString(),
+                metadata.getOrDefault("score", 0.0d).toString(),
+                doc.getText()
+            );
+            rd.setRelevanceScore(rd.getInitialScore());
+            refined.add(rd);
         }
-        return sb.toString();
+        return refined;
     }
 
     private String truncateText(String text, int maxLength) {
