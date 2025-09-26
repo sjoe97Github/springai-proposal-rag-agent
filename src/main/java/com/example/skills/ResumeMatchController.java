@@ -4,6 +4,7 @@ import com.example.skills.datatypes.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ingest.ChatPromptSystemContext;
+import ingest.SkillsQueryPrompt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -49,7 +50,7 @@ public class ResumeMatchController {
 
     @Autowired
     @Qualifier("skillsQueryPrompt")
-    private ChatPromptSystemContext skillsQueryPrompt;
+    private SkillsQueryPrompt skillsQueryPrompt;
 
     private final ResumeAgent resumeAgent;
 
@@ -104,76 +105,7 @@ public class ResumeMatchController {
         // TODO - Null check similarResumes?
         similarResumes = deduplicateResumes(similarResumes);
 
-        // restructure results for further processing
-        List<RefinedDocument> refinedResumes = restructureResumeResults(similarResumes);
-        List<RefinedDocument> refinedResults = new ArrayList<>();
-        for (RefinedDocument rd : refinedResumes) {
-            // covert refined resumes to JSON string
-            String resumeContext = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rd);
-
-            // Get prompt template
-            String promptText = skillsQueryPrompt.getSystemContext();
-
-            // Create prompt with parameters
-            Map<String, Object> params = new HashMap<>();
-            params.put("input", query.getQuery());
-            params.put("ranked_resumes", resumeContext);
-            PromptTemplate template = PromptTemplate.builder()
-                    .renderer(
-                            StTemplateRenderer
-                                    .builder().startDelimiterToken('<')
-                                    .endDelimiterToken('>')
-                                    .build())
-                    .template(promptText)
-                    .variables(params)
-                    .build();
-
-            Prompt prompt = template.create(params);
-
-            logger.info("Candidate Prompt: {}", prompt);
-
-            ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
-
-            String response = chatResponse.getResult().getOutput().getText();
-
-            logger.info("AI Response: {}", response);
-
-            // As of now the response is a JSON array consisting of a single RefinedDocument object
-            RefinedDocument[] refinedDocs = objectMapper.readValue(response, RefinedDocument[].class);
-            refinedResults.add(refinedDocs[0]);
-        }
-//
-//        // covert refined resumes to JSON string
-//        String resumeContext = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(refinedResumes);
-//
-//        // Get prompt template
-//        String promptText = skillsQueryPrompt.getSystemContext();
-//
-//        // Create prompt with parameters
-//        Map<String, Object> params = new HashMap<>();
-//        params.put("input", query.getQuery());
-//        params.put("ranked_resumes", resumeContext);
-//        PromptTemplate template = PromptTemplate.builder()
-//                .renderer(
-//                        StTemplateRenderer
-//                        .builder().startDelimiterToken('<')
-//                        .endDelimiterToken('>')
-//                        .build())
-//                .template(promptText)
-//                .variables(params)
-//                .build();
-//
-//        Prompt prompt = template.create(params);
-//
-//        logger.info("Prompt: {}", prompt);
-//
-//        ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
-//
-//        String response = chatResponse.getResult().getOutput().getText();
-//
-//        logger.info("AI Response: {}", response);
-
-        String response = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(refinedResults);
+        String response = searchRefinementChunkWise(similarResumes, query);
 
         // Add to chat history
         chatHistory.add(new AssistantMessage(response));
@@ -226,6 +158,99 @@ public class ResumeMatchController {
         logger.debug("Final Result: {}", finalResult);
 
         return result;
+    }
+
+    private String searchRefinementChunkWise(List<Document> similarResumes, ResumeMatchQuery query) throws JsonProcessingException {
+        List<RefinedDocument> refinedResults = new ArrayList<>();
+
+        // restructure results for further processing
+        List<RefinedDocument> refinedResumes = restructureResumeResultsForChunkWiseProcessing(similarResumes);
+
+        for (RefinedDocument rd : refinedResumes) {
+            // covert refined resumes to JSON string
+            String resumeContext = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rd);
+
+            // Get prompt template
+            String promptText = skillsQueryPrompt.getSystemContextChunkWise();
+
+            // Create prompt with parameters
+            Map<String, Object> params = new HashMap<>();
+            params.put("input", query.getQuery());
+            params.put("ranked_resumes", resumeContext);
+            PromptTemplate template = PromptTemplate.builder()
+                    .renderer(
+                            StTemplateRenderer
+                                    .builder().startDelimiterToken('<')
+                                    .endDelimiterToken('>')
+                                    .build())
+                    .template(promptText)
+                    .variables(params)
+                    .build();
+
+            Prompt prompt = template.create(params);
+
+            logger.trace("Candidate Prompt: {}", prompt);
+
+            ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
+
+            String response = chatResponse.getResult().getOutput().getText();
+
+            logger.trace("AI Response, Per Chunk: {}", response);
+
+            // As of now the response is a JSON array consisting of a single RefinedDocument object
+            RefinedDocument[] refinedDocs = objectMapper.readValue(response, RefinedDocument[].class);
+            refinedResults.add(refinedDocs[0]);
+        }
+
+        // Loop over refined results and update relevanceScore (relevanceScore * 100) rounded to nearest integer
+        for (RefinedDocument rd : refinedResults) {
+            double relevance = 0.0;
+            try {
+                relevance = Double.parseDouble(rd.getRelevanceScore());
+            } catch (NumberFormatException nfe) {
+                logger.warn("Failed to parse relevance score: {}", nfe.getMessage());
+            }
+            rd.setFinalScore((int)Math.round(relevance * 100));
+        }
+
+        String completeResponse = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(refinedResults);
+
+        logger.info("ChunkWise AI Response: {}", completeResponse);
+
+        return completeResponse;
+    }
+
+    private String searchRefinementAllChunks(List<Document> similarResumes, ResumeMatchQuery query) throws JsonProcessingException {
+        String resumeContext = formatResumesForAllChunksPrompt(similarResumes);
+
+        // Get prompt template
+        String promptText = skillsQueryPrompt.getSystemContext();
+
+        // Create prompt with parameters
+        Map<String, Object> params = new HashMap<>();
+        params.put("input", query.getQuery());
+        params.put("ranked_resumes", resumeContext);
+        PromptTemplate template = PromptTemplate.builder()
+                .renderer(
+                        StTemplateRenderer
+                                .builder().startDelimiterToken('<')
+                                .endDelimiterToken('>')
+                                .build())
+                .template(promptText)
+                .variables(params)
+                .build();
+
+        Prompt prompt = template.create(params);
+
+        logger.info("Prompt: {}", prompt);
+
+        ChatResponse chatResponse = aiClient.prompt(prompt).call().chatResponse();
+
+        String response = chatResponse.getResult().getOutput().getText();
+
+        logger.info("All Chunks AI Response: {}", response);
+
+        return response;
     }
 
     private List<GithubRep> getRepositories(ResumeResult resumeResult) {
@@ -308,22 +333,22 @@ public class ResumeMatchController {
             }
         }
     }
-//
-//    private String formatResumesForPrompt(List<Document> resumes) {
-//        StringBuilder sb = new StringBuilder();
-//        for (int i = 0; i < resumes.size(); i++) {
-//            Document doc = resumes.get(i);
-//            Map<String, Object> metadata = doc.getMetadata();
-//
-//            sb.append("CandidateID: ").append(metadata.getOrDefault("file", "unknown-" + i)).append("\n");
-//            sb.append("InitialScore: ").append(metadata.getOrDefault("score", 0.0d)).append("\n");
-//            sb.append("Path: ").append(metadata.getOrDefault("file", "unknown")).append("\n");
-//            sb.append("ResumeSnippet:\n").append(truncateText(doc.getText(), 2500)).append("\n\n");
-//        }
-//        return sb.toString();
-//    }
 
-    private List<RefinedDocument> restructureResumeResults(List<Document> resumes) {
+    private String formatResumesForAllChunksPrompt(List<Document> resumes) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < resumes.size(); i++) {
+            Document doc = resumes.get(i);
+            Map<String, Object> metadata = doc.getMetadata();
+
+            sb.append("CandidateID: ").append(metadata.getOrDefault("file", "unknown-" + i)).append("\n");
+            sb.append("InitialScore: ").append(metadata.getOrDefault("score", 0.0d)).append("\n");
+            sb.append("Path: ").append(metadata.getOrDefault("file", "unknown")).append("\n");
+            sb.append("ResumeSnippet:\n").append(truncateText(doc.getText(), 2500)).append("\n\n");
+        }
+        return sb.toString();
+    }
+
+    private List<RefinedDocument> restructureResumeResultsForChunkWiseProcessing(List<Document> resumes) {
         List<RefinedDocument> refined = new ArrayList<>();
         for (Document doc : resumes) {
             Map<String, Object> metadata = doc.getMetadata();

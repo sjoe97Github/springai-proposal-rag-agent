@@ -14,6 +14,7 @@ public class RefinedDocument {
     private String shortExplanation;
     private String resumeSummary;
     private String relevanceScore;
+    private int finalScore;
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
     @JsonProperty("github")
@@ -49,6 +50,15 @@ public class RefinedDocument {
     public void setRelevanceScore(String relevanceScore) {
         this.relevanceScore = relevanceScore;
     }
+
+    public int getFinalScore() {
+        return finalScore;
+    }
+
+    public void setFinalScore(int finalScore) {
+        this.finalScore = finalScore;
+    }
+
     public String getResumeSnippet() {
         return resumeSnippet;
     }

@@ -1,20 +1,32 @@
 package com.example.skills.datatypes;
 
+import com.fasterxml.jackson.annotation.*;
+
 import java.net.URL;
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ResumeResult {
     private String candidateId;
+    private String initialScore;
+    private String relevanceScore;
     private int finalScore;
     private String shortExplanation;
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @JsonProperty("linkedIn")
+    @JsonSetter(nulls = Nulls.SET)
     private URL linkedin;
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @JsonProperty("github")
+    @JsonSetter(nulls = Nulls.SET)
     private URL github;
 
-//    @JsonIgnore
+    //@JsonIgnore
     private List<GithubRep> reposList;
 
     public ResumeResult() {}
 
+    // TODO - Replace with Builder pattern
     public ResumeResult(String candidateId, int finalScore, String shortExplanation, URL linkedin, URL github, List<GithubRep> reposList) {
         this.candidateId = candidateId;
         this.finalScore = finalScore;
@@ -30,6 +42,22 @@ public class ResumeResult {
 
     public void setCandidateId(String candidateId) {
         this.candidateId = candidateId;
+    }
+
+    public String getInitialScore() {
+        return initialScore;
+    }
+
+    public void setInitialScore(String initialScore) {
+        this.initialScore = initialScore;
+    }
+
+    public String getRelevanceScore() {
+        return relevanceScore;
+    }
+
+    public void setRelevanceScore(String relevanceScore) {
+        this.relevanceScore = relevanceScore;
     }
 
     public int getFinalScore() {
@@ -48,10 +76,12 @@ public class ResumeResult {
         this.shortExplanation = shortExplanation;
     }
 
+    @JsonProperty("linkedIn")
     public URL getLinkedin() {
         return linkedin;
     }
 
+    @JsonProperty("linkedIn")
     public void setLinkedin(URL linkedin) {
         this.linkedin = linkedin;
     }

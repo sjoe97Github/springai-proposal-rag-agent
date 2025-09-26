@@ -33,7 +33,7 @@ public class IngestConfig {
     }
 
     @Bean("skillsQueryPrompt")
-    public ChatPromptSystemContext skillsQueryPrompt() {
+    public SkillsQueryPrompt skillsQueryPrompt() {
         return new SkillsQueryPrompt();
     }
 }
